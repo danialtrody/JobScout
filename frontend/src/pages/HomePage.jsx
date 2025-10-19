@@ -3,7 +3,8 @@ import Card from "../components/Card";
 import Keyword from "../components/KeyWords";
 
 function HomePage() {
-  const BASE_URL = "/api/jobs";
+  const BASE_URL = process.env.REACT_APP_API_URL || "/api/jobs";
+
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [position, setPosition] = useState("computer science");
