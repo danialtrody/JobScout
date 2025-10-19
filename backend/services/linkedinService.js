@@ -6,6 +6,8 @@ export async function fetchLinkedInJobs(keyword, location) {
     browser = await puppeteer.launch({
       headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox'], // קריטי ל-Render
+      executablePath: '/usr/bin/chromium' // ADD THIS LINE - use Render's chromium
+
     });
 
     const page = await browser.newPage();
