@@ -1,33 +1,10 @@
 import puppeteer from 'puppeteer';
 
 export async function fetchLinkedInJobs(keyword, location) {
-  // TEMPORARY MOCK DATA FOR TESTING
-  console.log('🧪 Using mock data for testing');
-  return [
-    {
-      title: "Senior Developer",
-      company: "Test Company",
-      location: "Israel",
-      link: "https://linkedin.com"
-    },
-    {
-      title: "Junior Developer",
-      company: "Another Company",
-      location: "Tel Aviv",
-      link: "https://linkedin.com"
-    },
-    {
-      title: "Full Stack Developer",
-      company: "Startup Inc",
-      location: "Tel Aviv",
-      link: "https://linkedin.com"
-    }
-  ];
-
-  /* COMMENT THIS OUT FOR NOW - WILL FIX PUPPETEER LATER
   let browser;
   try {
     console.log('🚀 Starting browser...');
+    console.log('📍 Search:', keyword, 'in', location);
     
     browser = await puppeteer.launch({
       headless: true,
@@ -35,7 +12,9 @@ export async function fetchLinkedInJobs(keyword, location) {
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
-        '--disable-gpu'
+        '--disable-gpu',
+        '--disable-software-rasterizer',
+        '--single-process'
       ],
       executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium'
     });
@@ -43,15 +22,20 @@ export async function fetchLinkedInJobs(keyword, location) {
     console.log('✅ Browser launched');
     const page = await browser.newPage();
 
+    // Set user agent to avoid detection
+    await page.setUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    );
+
     const url = `https://www.linkedin.com/jobs/search/?keywords=${encodeURIComponent(
       keyword
     )}&location=${encodeURIComponent(location)}&f_TPR=r86400`;
 
-    console.log('🔗 Navigating to:', url);
-    await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
+    console.log('🔗 Navigating to LinkedIn...');
+    await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
 
-    console.log('⏳ Waiting for jobs...');
-    await page.waitForSelector('.base-card', { timeout: 15000 });
+    console.log('⏳ Waiting for job cards...');
+    await page.waitForSelector('.base-card', { timeout: 20000 });
 
     const jobs = await page.evaluate(() => {
       const results = [];
@@ -62,23 +46,50 @@ export async function fetchLinkedInJobs(keyword, location) {
         const link = card.querySelector('a')?.href;
 
         if (title && company && link) {
-          results.push({ title, company, location, link });
+          results.push({ 
+            title, 
+            company, 
+            location: location || 'Not specified', 
+            link 
+          });
         }
       });
       return results;
     });
 
     console.log(`✅ Found ${jobs.length} jobs`);
+    
+    if (jobs.length === 0) {
+      console.log('⚠️ No jobs found, returning sample data');
+      return [
+        {
+          title: "No jobs found for this search",
+          company: "Try different keywords or location",
+          location: "N/A",
+          link: "#"
+        }
+      ];
+    }
+    
     return jobs;
 
   } catch (error) {
     console.error('❌ Error in fetchLinkedInJobs:', error.message);
-    return [];
+    console.error('Stack:', error.stack);
+    
+    // Return informative error instead of empty array
+    return [
+      {
+        title: "Service temporarily unavailable",
+        company: "LinkedIn blocking detected or Puppeteer error",
+        location: error.message,
+        link: "#"
+      }
+    ];
   } finally {
     if (browser) {
       await browser.close();
       console.log('🔒 Browser closed');
     }
   }
-  */
 }
