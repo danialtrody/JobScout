@@ -6,7 +6,8 @@ export async function fetchLinkedInJobs(keyword, location) {
     browser = await puppeteer.launch({
       headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox'], // קריטי ל-Render
-      executablePath: '/usr/bin/chromium' // ADD THIS LINE - use Render's chromium
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
+
 
     });
 
@@ -33,7 +34,21 @@ export async function fetchLinkedInJobs(keyword, location) {
           results.push({ title, company, location, link });
         }
       });
-      return results;
+      // return results;
+      return [
+        {
+          title: "Senior Developer",
+          company: "Test Company",
+          location: "Israel",
+          link: "https://linkedin.com"
+        },
+        {
+          title: "Junior Developer",
+          company: "Another Company",
+          location: "Tel Aviv",
+          link: "https://linkedin.com"
+        }
+      ];
     });
 
     return jobs;
