@@ -6,6 +6,7 @@ export const getJobs = async (req, res) => {
 
   try {
     const jobs = await fetchLinkedInJobs(keyword, location);
+    console.log(jobs); 
     res.json(jobs);
   } catch (error) {
     console.error(error);
