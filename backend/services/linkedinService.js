@@ -1,25 +1,56 @@
 import puppeteer from 'puppeteer';
 
 export async function fetchLinkedInJobs(keyword, location) {
+  // TEMPORARY MOCK DATA FOR TESTING
+  console.log('🧪 Using mock data for testing');
+  return [
+    {
+      title: "Senior Developer",
+      company: "Test Company",
+      location: "Israel",
+      link: "https://linkedin.com"
+    },
+    {
+      title: "Junior Developer",
+      company: "Another Company",
+      location: "Tel Aviv",
+      link: "https://linkedin.com"
+    },
+    {
+      title: "Full Stack Developer",
+      company: "Startup Inc",
+      location: "Tel Aviv",
+      link: "https://linkedin.com"
+    }
+  ];
+
+  /* COMMENT THIS OUT FOR NOW - WILL FIX PUPPETEER LATER
   let browser;
   try {
+    console.log('🚀 Starting browser...');
+    
     browser = await puppeteer.launch({
       headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'], // קריטי ל-Render
-      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
-
-
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu'
+      ],
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium'
     });
 
+    console.log('✅ Browser launched');
     const page = await browser.newPage();
 
     const url = `https://www.linkedin.com/jobs/search/?keywords=${encodeURIComponent(
       keyword
-    )}&location=${encodeURIComponent(location)}&f_TPR=r86400`; // last 24h
+    )}&location=${encodeURIComponent(location)}&f_TPR=r86400`;
 
+    console.log('🔗 Navigating to:', url);
     await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
 
-    // לחכות שלפחות קארד אחד נטען
+    console.log('⏳ Waiting for jobs...');
     await page.waitForSelector('.base-card', { timeout: 15000 });
 
     const jobs = await page.evaluate(() => {
@@ -34,28 +65,20 @@ export async function fetchLinkedInJobs(keyword, location) {
           results.push({ title, company, location, link });
         }
       });
-      // return results;
-      return [
-        {
-          title: "Senior Developer",
-          company: "Test Company",
-          location: "Israel",
-          link: "https://linkedin.com"
-        },
-        {
-          title: "Junior Developer",
-          company: "Another Company",
-          location: "Tel Aviv",
-          link: "https://linkedin.com"
-        }
-      ];
+      return results;
     });
 
+    console.log(`✅ Found ${jobs.length} jobs`);
     return jobs;
+
   } catch (error) {
-    console.error('Error in fetchLinkedInJobs:', error);
-    return []; // מחזיר מערך ריק במקום לזרוק 500
+    console.error('❌ Error in fetchLinkedInJobs:', error.message);
+    return [];
   } finally {
-    if (browser) await browser.close();
+    if (browser) {
+      await browser.close();
+      console.log('🔒 Browser closed');
+    }
   }
+  */
 }
