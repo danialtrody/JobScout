@@ -4,8 +4,8 @@ import Keyword from "../components/KeyWords";
 
 function HomePage() {
 
-  // const BASE_URL = "http://localhost:3000/api/jobs";
-  const BASE_URL = "/api/jobs";
+  const BASE_URL = "http://localhost:3000/api/jobs";
+  // const BASE_URL = "/api/jobs";
   
 
   const [jobs, setJobs] = useState([]);
@@ -49,7 +49,7 @@ function HomePage() {
           Please be patient, it may take a few seconds to gather the most relevant opportunities.
         </p>
         <p className="loading-title">
-          ☕ Grab a coffee, stretch, or do a quick dance while we fetch the newest roles just for you!
+          ☕ Grab a coffee, stretch while we fetch the newest roles just for you!
         </p>
   
         {/* Spinner */}
