@@ -18,21 +18,12 @@ code {
 
 .title{
   font-size: 40px;
-  font-family: cursive;
   font-weight: 600;
   margin-bottom: 25px;
 }
 
 .card {
   border-radius: 20px;
-}
-
-
-
-.loading-title {
-  font-size: 1.25rem; 
-  font-weight: 600;  
-  margin-bottom: 0.5rem;
 }
 
 .spinner {
@@ -68,6 +59,16 @@ code {
     align-items: stretch;
     width: 50%;
   }
+
+  .title{
+    font-family: cursive;
+  }
+
+  .loading-title {
+    font-size: 1.25rem; 
+    font-weight: 600;  
+    margin-bottom: 0.5rem;
+  }
   
 }
 
@@ -79,7 +80,7 @@ code {
     align-items: center;
     height: 100vh;
     text-align: center;
-    font-size: 20px;
+    font-size: 20px !important;
   }
 
   .jobCard {
@@ -89,6 +90,22 @@ code {
   span.input-group-text {
     display: none;
   }
+
+  .card {
+    min-width: 330px;
+  }
+
+  .title {
+    text-align: center;
+}
+
+
+.loading-title {
+  font-size: 16px; 
+  font-weight: 600;  
+  margin-bottom: 0.5rem;
+}
+  
 
 }
 
