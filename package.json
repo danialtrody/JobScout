@@ -3,11 +3,13 @@
   "version": "1.0.0",
   "type": "module",
   "dependencies": {
+    "@sparticuz/chromium": "^141.0.0",
     "cors": "^2.8.5",
     "express": "^4.21.2",
     "express-rate-limit": "^6.7.0",
     "nodemon": "^3.1.10",
-    "puppeteer": "^24.25.0"
+    "puppeteer": "^24.25.0",
+    "puppeteer-core": "^24.25.0"
   },
   "scripts": {
     "start": "node server.js",
