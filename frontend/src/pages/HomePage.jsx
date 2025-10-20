@@ -3,9 +3,8 @@ import Card from "../components/Card";
 import Keyword from "../components/KeyWords";
 
 function HomePage() {
-  const BASE_URL = "http://localhost:3000/api/jobs";
-  // const BASE_URL = "/api/jobs";
 
+  const BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:3000/api/jobs";
   
 
   const [jobs, setJobs] = useState([]);
@@ -36,7 +35,24 @@ function HomePage() {
     getJobs();
   }, [position,location]);
 
-  if (loading) return <p className="text-center mt-5">Loading jobs...</p>;
+  if (loading)
+    return (
+      <div className="text-center mt-10">
+        <p className="text-lg font-semibold mb-2">
+          🔍 We are searching for the latest job positions posted in the last 24 hours...
+        </p>
+        <p className="text-gray-600 mb-4">
+          Please be patient, it may take a few seconds to gather the most relevant opportunities.
+        </p>
+        <p className="text-gray-500">
+          ☕ Grab a coffee or stretch while we fetch the newest roles just for you!
+        </p>
+        <div className="mt-6 flex justify-center">
+          <div className="w-12 h-12 border-4 border-blue-500 border-dashed rounded-full animate-spin"></div>
+        </div>
+      </div>
+    );
+  
 
   return (
     <div className="container mt-5">
