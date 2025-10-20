@@ -10,7 +10,7 @@ function HomePage() {
 
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [position, setPosition] = useState("computer science");
+  const [position, setPosition] = useState("software engineer");
   const [location, setLocation] = useState("Israel");
 
 

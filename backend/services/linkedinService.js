@@ -35,7 +35,8 @@ export async function fetchLinkedInJobs(keyword, location) {
 
     const url = `https://www.linkedin.com/jobs/search/?keywords=${encodeURIComponent(
       keyword
-    )}&location=${encodeURIComponent(location)}&f_TPR=r86400`;
+    )}&location=${encodeURIComponent(location)}&f_TPR=r86400&f_E=2`;
+    
 
     console.log("🔎 Fetching:", url);
 
