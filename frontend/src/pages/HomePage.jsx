@@ -4,8 +4,8 @@ import Keyword from "../components/KeyWords";
 
 function HomePage() {
 
-  // const BASE_URL = "http://localhost:3000/api/jobs";
-  const BASE_URL = "/api/jobs";
+  const BASE_URL = "http://localhost:3000/api/jobs";
+  // const BASE_URL = "/api/jobs";
   
 
   const [jobs, setJobs] = useState([]);
@@ -38,26 +38,29 @@ function HomePage() {
 
   if (loading)
     return (
-      <div className="text-center mt-10">
-        <p className="text-lg font-semibold mb-2">
-          🔍 We are searching for the latest job positions posted in the last 24 hours...
+      <div className="loading-container">
+        <p className="loading-title">
+          🔍 Searching for the latest job positions posted in the last 24 hours...
         </p>
-        <p className="text-gray-600 mb-4">
+        <p>
+        👩‍💻 <strong>Junior</strong>, 🎓 <strong>Entry Level</strong>, and 🏢 <strong>Internship</strong> positions are included.
+        </p>
+        <p>
           Please be patient, it may take a few seconds to gather the most relevant opportunities.
         </p>
-        <p className="text-gray-500">
-          ☕ Grab a coffee or stretch while we fetch the newest roles just for you!
+        <p >
+          ☕ Grab a coffee, stretch, or do a quick dance while we fetch the newest roles just for you!
         </p>
-        <div className="mt-6 flex justify-center">
-          <div className="w-12 h-12 border-4 border-blue-500 border-dashed rounded-full animate-spin"></div>
-        </div>
+  
+        {/* Spinner */}
+        <div className="spinner"></div>
       </div>
     );
   
 
   return (
     <div className="container mt-5">
-      <h1 className="mb-4">Job List</h1>
+      <h1 className="title">Job List</h1>
       <Keyword
         position={position}
         setPosition={setPosition}

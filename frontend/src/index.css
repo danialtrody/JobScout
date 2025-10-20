@@ -5,6 +5,9 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+   background-color: #F5F7FA;
+   background: radial-gradient(circle at center, #7cecec 0%, #a5c9eb 80%);
+   
 }
 
 code {
@@ -12,6 +15,58 @@ code {
     monospace;
 }
 
-.jobCard{
+
+.title{
+  font-size: 40px;
+  font-family: cursive;
+  font-weight: 600;
+  margin-bottom: 25px;
+}
+
+.loading-container {
+  display: flex;
+  flex-direction: column;
   justify-content: center;
-} 
+  align-items: center;
+  height: 100vh;
+  font-size: larger;
+  font-family: cursive;
+  font-weight: 600;
+  text-align: center;
+}
+
+.loading-title {
+  font-size: 1.25rem; 
+  font-weight: 600;  
+  margin-bottom: 0.5rem;
+}
+
+.spinner {
+  width: 50px;
+  height: 50px;
+  border: 5px dashed #3b82f6; 
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.input-group {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  width: 50%;
+}
+
+
+.card {
+  border-radius: 20px;
+}
+
+.input-group-text,.form-control{
+  font-family: cursive;
+}
