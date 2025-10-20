@@ -36,7 +36,7 @@ function HomePage() {
     getJobs();
   }, [position,location]);
 
-  if (loading)
+  if (!loading)
     return (
       <div className="loading-container">
         <p className="loading-title">
