@@ -62,7 +62,7 @@ export async function fetchIndeedJobs(keyword, location) {
 
     const base = "https://il.indeed.com";
     let allJobs = [];
-    const MAX_PAGES = 3;
+    const MAX_PAGES = 2;
 
     for (let i = 0; i < MAX_PAGES; i++) {
       const url = `${base}/jobs?q=${encodeURIComponent(keyword)}&l=${encodeURIComponent(location)}&fromage=1&sort=date&start=${i * 15}`;
