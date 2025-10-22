@@ -34,6 +34,23 @@ code {
   animation: spin 1s linear infinite;
 }
 
+.footer {
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.footer a {
+  text-decoration: underline;
+}
+
+.footer a:hover {
+  color: #ffc107;
+}
+
+.bg-dark {
+  background-color: rgb(15 36 62 / 26%) !important;
+}
+
 
 
 @media only screen and (min-width: 501px) {

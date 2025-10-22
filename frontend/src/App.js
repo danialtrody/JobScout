@@ -1,5 +1,6 @@
 import HomePage from "../src/pages/HomePage"
 import { Route, Routes } from 'react-router-dom'
+import Footer from "./components/Footer";
 
 
 function App() {
@@ -8,6 +9,7 @@ function App() {
         <Routes>
           <Route path="/" element={<HomePage />} />
         </Routes>
+        <Footer/>
     </div>
   );
 }
