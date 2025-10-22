@@ -16,8 +16,8 @@ export async function fetchIndeedJobs(keyword, location) {
           ? { headless: true, args: ["--no-sandbox", "--disable-setuid-sandbox"] }
           : {
               args: [
-                ...chromium.args, 
-                "--no-sandbox", 
+                ...chromium.args,
+                "--no-sandbox",
                 "--disable-setuid-sandbox",
                 "--disable-dev-shm-usage",
                 "--disable-blink-features=AutomationControlled"
@@ -30,32 +30,20 @@ export async function fetchIndeedJobs(keyword, location) {
     }
 
     page = await browser.newPage();
-    
-    // הסר webdriver flag
+
+    // Override webdriver & User-Agent
     await page.evaluateOnNewDocument(() => {
-      Object.defineProperty(navigator, 'webdriver', {
-        get: () => false,
-      });
+      Object.defineProperty(navigator, "webdriver", { get: () => false });
     });
-    
-    // נקה cookies לפני כל חיפוש
-    try {
-      const client = await page.target().createCDPSession();
-      await client.send('Network.clearBrowserCookies');
-      await client.send('Network.clearBrowserCache');
-    } catch (e) {
-      console.log("⚠️ Could not clear cookies:", e.message);
-    }
-    
     await page.setUserAgent(
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     );
-    
     await page.setViewport({ width: 1366, height: 768 });
 
+    // רק abort resource types לא קריטיים (אפשר להוריד block בפרודקשן אם צריך)
     await page.setRequestInterception(true);
     page.on("request", (req) => {
-      const blocked = ["image", "stylesheet", "font", "media"];
+      const blocked = isLocal ? ["image", "stylesheet", "font", "media"] : [];
       if (blocked.includes(req.resourceType())) req.abort();
       else req.continue();
     });
@@ -69,27 +57,22 @@ export async function fetchIndeedJobs(keyword, location) {
       console.log(`🔎 Fetching Indeed (Page ${i + 1}):`, url);
 
       try {
-        await page.goto(url, { waitUntil: "networkidle2", timeout: 45000 });
+        await page.goto(url, { waitUntil: "networkidle2", timeout: 90000 });
       } catch (navError) {
         console.error(`❌ Navigation failed for page ${i + 1}:`, navError.message);
         break;
       }
-      
-      // חכה לתוכן
-      try {
-        await page.waitForSelector("body", { timeout: 10000 });
-      } catch (e) {
-        console.log(`⚠️ Body selector timeout on page ${i + 1}`);
-      }
-      
-      await new Promise(r => setTimeout(r, 3000));
+
+      // Scroll קטן לוודא שכל המשרות נטענו
+      await page.evaluate(() => {
+        window.scrollBy(0, window.innerHeight);
+      });
+      await new Promise(r => setTimeout(r, 2000)); // תיקון במקום page.waitForTimeout
 
       const jobs = await page.evaluate((baseUrl, searchLocation) => {
         const seen = new Set();
         const rows = document.querySelectorAll("td.resultContent, div.job_seen_beacon, a.jcs-JobTitle, [data-jk]");
-        
-        console.log(`Found ${rows.length} potential job elements`);
-        
+
         return Array.from(rows)
           .map(row => {
             const root = row.closest("a") || row;
@@ -115,18 +98,14 @@ export async function fetchIndeedJobs(keyword, location) {
       }, base, location);
 
       console.log(`📄 Page ${i + 1}: Found ${jobs.length} jobs`);
-      
+
       if (jobs.length === 0) {
         console.log(`⚠️ No jobs on page ${i + 1}, stopping pagination`);
         break;
       }
-      
+
       allJobs.push(...jobs);
-      
-      // המתן בין דפים
-      if (i < MAX_PAGES - 1) {
-        await new Promise(r => setTimeout(r, 2000));
-      }
+      await new Promise(r => setTimeout(r, 2000)); // המתן בין דפים
     }
 
     console.log(`✅ Indeed (24h) found: ${allJobs.length} jobs`);
