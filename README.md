@@ -5,7 +5,7 @@
 
 ## 📖 About
 
-**JobScout** is a modern, web-based job board that fetches the **latest job opportunities** directly from LinkedIn.
+**JobScout** is a modern, web-based job board that fetches the **latest job opportunities** directly from **LinkedIn and Indeed**.
 It focuses on **junior**, **entry-level**, and **internship** positions, giving job seekers the most relevant, recent opportunities in their chosen location and field.
 
 This platform combines a React frontend with a Node.js/Express backend and leverages Puppeteer to scrape LinkedIn jobs efficiently while respecting modern server constraints.
