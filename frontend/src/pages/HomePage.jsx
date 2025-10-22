@@ -4,8 +4,8 @@ import Keyword from "../components/KeyWords";
 
 function HomePage() {
 
-  // const BASE_URL = "http://localhost:3000/api/jobs";
-  const BASE_URL = "/api/jobs";
+  const BASE_URL = "http://localhost:3000/api/jobs";
+  // const BASE_URL = "/api/jobs";
   
 
   const [jobs, setJobs] = useState([]);
@@ -75,6 +75,7 @@ function HomePage() {
             link={job.link}
             company={job.company}
             location={job.location}
+            source={job.source}
           />
         ))}
       </div>
