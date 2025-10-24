@@ -13,7 +13,7 @@ function Footer() {
           💡 Explore, learn, and grow your career with curated positions for Juniors, Entry-Level, and Internships.
         </p>
         <p className="mb-2">
-          ✉️ Contact us: <a href="mailto:info@jobsite.com" className="text-light">info@jobsite.com</a>
+          ✉️ Contact us: <a href="mailto:info@jobscout.com" className="text-light">info@jobscoute.com</a>
         </p>
         <hr className="border-light" />
         <p className="mb-0">&copy; {currentYear} Danial Trody. All rights reserved.</p>

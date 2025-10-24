@@ -1,10 +1,29 @@
-// fetchLinkedInJobs.js
-import puppeteer from "puppeteer"; 
-import puppeteerCore from "puppeteer-core"; 
+import puppeteer from "puppeteer";
+import puppeteerCore from "puppeteer-core";
 import chromium from "@sparticuz/chromium";
 
 let browser;
-const isLocal = process.env.NODE_ENV !== "production"; 
+const isLocal = process.env.NODE_ENV !== "production";
+
+function parseLinkedInDate(dateStr) {
+  if (!dateStr) return new Date(0);
+  const lower = dateStr.toLowerCase();
+  const now = new Date();
+
+  if (lower.includes("hour")) {
+    const hours = parseInt(lower.match(/\d+/)?.[0] || "0", 10);
+    return new Date(now.getTime() - hours * 60 * 60 * 1000);
+  }
+  if (lower.includes("minute")) {
+    const minutes = parseInt(lower.match(/\d+/)?.[0] || "0", 10);
+    return new Date(now.getTime() - minutes * 60 * 1000);
+  }
+  if (lower.includes("day")) {
+    const days = parseInt(lower.match(/\d+/)?.[0] || "0", 10);
+    return new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+  }
+  return now;
+}
 
 export async function fetchLinkedInJobs(keyword, location) {
   try {
@@ -24,7 +43,6 @@ export async function fetchLinkedInJobs(keyword, location) {
     }
 
     const page = await browser.newPage();
-
     await page.setRequestInterception(true);
     page.on("request", (req) => {
       const blocked = ["image", "stylesheet", "font", "media"];
@@ -34,26 +52,12 @@ export async function fetchLinkedInJobs(keyword, location) {
 
     const url = `https://www.linkedin.com/jobs/search/?keywords=${encodeURIComponent(
       keyword
-    )}&location=${encodeURIComponent(location)}&f_TPR=r86400&f_E=2`;
+    )}&location=${encodeURIComponent(location)}&f_E=1%2C2&f_TPR=r86400&sortBy=DD&refresh=true`;
 
-    console.log("🔎 Fetching:", url);
+    console.log(`🔎 Fetching jobs:`, url);
 
-    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
-    await page.waitForSelector(".base-card", { timeout: 10000 });
-
- 
-    const MAX_SCROLLS = 30;
-    let scrolls = 0;
-    let previousHeight;
-
-    while (scrolls < MAX_SCROLLS) {
-      previousHeight = await page.evaluate("document.body.scrollHeight");
-      await page.evaluate("window.scrollTo(0, document.body.scrollHeight)");
-      await new Promise(r => setTimeout(r, 2000)); 
-      const newHeight = await page.evaluate("document.body.scrollHeight");
-      if (newHeight === previousHeight) break; 
-      scrolls++;
-    }
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 45000 });
+    await page.waitForSelector(".base-card", { timeout: 15000 });
 
     const jobs = await page.evaluate(() => {
       const results = [];
@@ -62,14 +66,23 @@ export async function fetchLinkedInJobs(keyword, location) {
         const company = card.querySelector(".base-search-card__subtitle")?.innerText.trim();
         const location = card.querySelector(".job-search-card__location")?.innerText.trim();
         const link = card.querySelector("a")?.href;
-        if (title && company && link) results.push({ title, company, location, link, source: "LinkedIn" });
+        const date = card.querySelector(".job-search-card__listdate, .job-search-card__listdate--new")?.innerText.trim();
+
+        if (title && company && link) {
+          results.push({ title, company, location, link, dateTime: date || "N/A", source: "LinkedIn" });
+        }
       });
       return results;
     });
 
     await page.close();
-    console.log(`✅ LinkedIn (24h) found: ${jobs.length} jobs`);
+
+
+    jobs.sort((a, b) => parseLinkedInDate(b.dateTime) - parseLinkedInDate(a.dateTime));
+
+    console.log(`✅ Total jobs found: ${jobs.length}`);
     return jobs;
+
   } catch (err) {
     console.error("❌ Error fetching LinkedIn jobs:", err);
     return [];

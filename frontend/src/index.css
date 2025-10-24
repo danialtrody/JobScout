@@ -51,6 +51,10 @@ code {
   background-color: rgb(15 36 62 / 26%) !important;
 }
 
+.link-time-container{
+  display: flex;
+  justify-content: space-between;
+}
 
 
 @media only screen and (min-width: 501px) {
