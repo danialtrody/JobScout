@@ -30,11 +30,21 @@ function HomePage() {
   if (loading)
     return (
       <div className="loading-container">
-        <p className="loading-title">🔍 Searching for jobs...</p>
+        <p className="loading-title">
+          🔍 Searching for the latest job positions posted in the last 24 hours...
+        </p>
+        <p className="loading-title">
+          👩‍💻 <strong>Junior</strong>, 🎓 <strong>Entry Level</strong>, and 🏢 <strong>Internship</strong> positions are included.
+        </p>
+        <p className="loading-title">
+          Please be patient, it may take a few seconds to gather the most relevant opportunities.
+        </p>
+        <p className="loading-title">
+          ☕ Grab a coffee, stretch while we fetch the newest roles just for you!
+        </p>
         <div className="spinner"></div>
       </div>
     );
-
   return (
     <div className="container mt-5">
       <h1 className="title">Job List ({jobs.length})</h1>
