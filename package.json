@@ -11,6 +11,8 @@
     "nodemon": "^3.1.10",
     "puppeteer": "^24.25.0",
     "puppeteer-core": "^24.25.0",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
     "rss-parser": "^3.13.0"
   },
   "scripts": {
