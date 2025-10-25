@@ -135,16 +135,15 @@ export async function fetchIndeedJobs(keyword, location) {
               defaultViewport: null,
             }
           : {
-              args: [
-                ...chromium.args,
-                "--no-sandbox",
-                "--disable-setuid-sandbox",
-                "--disable-blink-features=AutomationControlled", // Hide automation
-                "--disable-dev-shm-usage"
-              ],
-              defaultViewport: chromium.defaultViewport,
-              executablePath: await chromium.executablePath(),
-              headless: chromium.headless,
+            headless: "new", // Use new headless mode - harder to detect
+            args: [
+              "--no-sandbox",
+              "--disable-setuid-sandbox",
+              "--disable-blink-features=AutomationControlled", // Hide automation
+              "--disable-dev-shm-usage",
+              "--disable-gpu"
+            ],
+            defaultViewport: null,
             }
       );
     }
