@@ -5,7 +5,6 @@ import chromium from "@sparticuz/chromium";
 let browser;
 const isLocal = process.env.NODE_ENV !== "production";
 
-
 // Small delay helper
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -22,13 +21,13 @@ async function scrollAndCollectAllJobs(page, maxJobs = 100) {
     "internship",
     "no experience",
     "entry level",
-    "graduate",      
-    "trainee",        
-    "associate",      
-    "new grad",       
-    "apprentice"      
+    "graduate",
+    "trainee",
+    "associate",
+    "new grad",
+    "apprentice"
   ];
-let currentPage = 0;
+  let currentPage = 0;
   const maxPages = 10;
 
   while (currentPage < maxPages && allJobs.size < maxJobs) {
@@ -44,21 +43,21 @@ let currentPage = 0;
           "h2.jobTitle a, h2.jobTitle span[title], .jobTitle a"
         );
         const title = titleEl?.innerText?.trim() || titleEl?.getAttribute("title")?.trim();
-        
+
         const company = card.querySelector(
           "[data-testid='company-name'], .companyName"
         )?.innerText.trim();
-        
+
         const location = card.querySelector(
           "[data-testid='text-location'], .companyLocation"
         )?.innerText.trim();
-        
+
         const linkEl = card.querySelector("h2.jobTitle a, .jcs-JobTitle");
         const jobId = card.getAttribute("data-jk") || linkEl?.getAttribute("data-jk");
-        const link = jobId 
+        const link = jobId
           ? `https://www.indeed.com/viewjob?jk=${jobId}`
           : linkEl?.href;
-        
+
         if (title && company && link) {
           const lowerTitle = title.toLowerCase();
           const isRelevant = experienceKeywords.some(word => lowerTitle.includes(word));
@@ -125,12 +124,24 @@ export async function fetchIndeedJobs(keyword, location) {
       browser = await puppeteerToUse.launch(
         isLocal
           ? {
-              headless: fa,
-              args: ["--no-sandbox", "--disable-setuid-sandbox", "--start-maximized"],
+              headless: "new", // Use new headless mode - harder to detect
+              args: [
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-blink-features=AutomationControlled", // Hide automation
+                "--disable-dev-shm-usage",
+                "--disable-gpu"
+              ],
               defaultViewport: null,
             }
           : {
-              args: [...chromium.args, "--no-sandbox", "--disable-setuid-sandbox"],
+              args: [
+                ...chromium.args,
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-blink-features=AutomationControlled", // Hide automation
+                "--disable-dev-shm-usage"
+              ],
               defaultViewport: chromium.defaultViewport,
               executablePath: await chromium.executablePath(),
               headless: chromium.headless,
@@ -139,6 +150,18 @@ export async function fetchIndeedJobs(keyword, location) {
     }
 
     const page = await browser.newPage();
+
+    // Remove webdriver flag that exposes automation
+    await page.evaluateOnNewDocument(() => {
+      Object.defineProperty(navigator, 'webdriver', {
+        get: () => false,
+      });
+    });
+
+    // Add realistic user agent
+    await page.setUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    );
 
     await page.setRequestInterception(true);
     page.on("request", (req) => {
@@ -150,9 +173,9 @@ export async function fetchIndeedJobs(keyword, location) {
     // Indeed URL with entry-level filter, last 24h
     const base = "https://il.indeed.com";
     const url = `${base}/q-${encodeURIComponent(keyword)}-jobs.html?from=relatedQueries&saIdx=3&rqf=1&parentQnorm=software+engineer`;
-        console.log("🔎 Navigating to:", url);
+    console.log("🔎 Navigating to:", url);
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60000 });
-    
+
     await page.waitForSelector(
       ".job_seen_beacon, .cardOutline, div[data-jk], .jobsearch-ResultsList",
       { timeout: 30000 }
@@ -162,8 +185,9 @@ export async function fetchIndeedJobs(keyword, location) {
 
     let jobs = await scrollAndCollectAllJobs(page, 200);
 
-
     console.log(`✅ Total jobs collected and sorted: ${jobs.length}`);
+    
+    await page.close();
     return jobs;
   } catch (err) {
     console.error("❌ Error fetching Indeed jobs:", err);
