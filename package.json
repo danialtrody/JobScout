@@ -19,6 +19,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "install": "npx puppeteer browsers install chrome"
+    "install": "npx puppeteer browsers install chrome",
+    "postinstall": "apt-get update && apt-get install -y chromium-browser"
+
   }
 }
