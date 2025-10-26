@@ -8,13 +8,13 @@ import rateLimit from "express-rate-limit";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-app.set("trust proxy", 1); // trust first proxy
 
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 
+app.set("trust proxy", 1); // trust first proxy
 
 app.use(cors());
 app.use(express.json());
@@ -37,3 +37,5 @@ app.get("*", (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
+// cd frontend && npm install && npm run build && cd .. && npm install 
