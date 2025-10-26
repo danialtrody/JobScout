@@ -96,21 +96,21 @@ async function scrollAndCollectAllJobs(page, maxJobs = 100) {
 // Main function to fetch Indeed jobs
 export async function fetchIndeedJobs(keyword) {
   try {
-    // Detect if running locally
     const isLocal = process.env.IS_LOCAL === "true" || process.env.NODE_ENV !== "production";
 
     const { browser, page } = await connect({
-      headless: !isLocal, // 🔹 headless only on server/Render
-      args: [],
+      headless: !isLocal, // headless on Render
+      executablePath: process.env.CHROME_PATH, // 🔹 use installed Chromium
+      args: ["--no-sandbox", "--disable-setuid-sandbox"], // 🔹 required on Linux
       turnstile: true,
-      disableXvfb: false, // required if using Linux server
+      disableXvfb: false,
     });
 
     const url = `https://il.indeed.com/q-${encodeURIComponent(keyword)}-jobs.html?from=relatedQueries&saIdx=3&rqf=1`;
     console.log("🔎 Navigating to:", url);
 
     await page.goto(url, { waitUntil: "networkidle2", timeout: 60000 });
-    await wait(3000); // wait a bit so jobs render
+    await wait(3000);
 
     await page.waitForSelector(
       ".job_seen_beacon, .cardOutline, div[data-jk], .jobsearch-ResultsList",
@@ -121,9 +121,7 @@ export async function fetchIndeedJobs(keyword) {
     const jobs = await scrollAndCollectAllJobs(page, 200);
 
     console.log(`✅ Total jobs collected: ${jobs.length}`);
-    if (isLocal) {
-      // leave browser open for local debugging
-    } else {
+    if (!isLocal) {
       await browser.close(); // close browser on Render
     }
 
