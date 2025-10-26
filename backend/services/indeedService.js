@@ -5,15 +5,22 @@ function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// Scroll and collect all jobs (unchanged)
+// Scroll and collect all jobs
 async function scrollAndCollectAllJobs(page, maxJobs = 100) {
   console.log("🖱️ Starting to scroll and collect jobs...");
 
   const allJobs = new Map();
   const experienceKeywords = [
-    "junior", "intern", "internship", "no experience",
-    "entry level", "graduate", "trainee", "associate",
-    "new grad", "apprentice",
+    "junior",
+    "intern",
+    "internship",
+    "no experience",
+    "entry level",
+    "graduate",
+    "trainee",
+    "associate",
+    "new grad",
+    "apprentice",
   ];
 
   let currentPage = 0;
@@ -96,35 +103,28 @@ async function scrollAndCollectAllJobs(page, maxJobs = 100) {
 // Main function to fetch Indeed jobs
 export async function fetchIndeedJobs(keyword) {
   try {
-    const isLocal = process.env.IS_LOCAL === "true" || process.env.NODE_ENV !== "production";
-
     const { browser, page } = await connect({
-      headless: !isLocal, // headless on Render
-      executablePath: process.env.CHROME_PATH, // 🔹 use installed Chromium
-      args: ["--no-sandbox", "--disable-setuid-sandbox"], // 🔹 required on Linux
+      headless: false, // 🔹 show the browser
+      args: [], 
       turnstile: true,
-      disableXvfb: false,
     });
 
     const url = `https://il.indeed.com/q-${encodeURIComponent(keyword)}-jobs.html?from=relatedQueries&saIdx=3&rqf=1`;
     console.log("🔎 Navigating to:", url);
 
     await page.goto(url, { waitUntil: "networkidle2", timeout: 60000 });
-    await wait(3000);
+    await wait(3000); // 🔹 wait a bit so jobs render
 
     await page.waitForSelector(
       ".job_seen_beacon, .cardOutline, div[data-jk], .jobsearch-ResultsList",
-      { timeout: 60000 }
+      { timeout: 60000 } // 🔹 increase timeout
     );
 
     console.log("✅ Page loaded, starting job collection...");
     const jobs = await scrollAndCollectAllJobs(page, 200);
 
     console.log(`✅ Total jobs collected: ${jobs.length}`);
-    if (!isLocal) {
-      await browser.close(); // close browser on Render
-    }
-
+    // await browser.close(); // 🔹 leave browser open to see it
     return jobs;
   } catch (err) {
     console.error("❌ Error fetching Indeed jobs:", err);
