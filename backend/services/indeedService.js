@@ -1,12 +1,14 @@
 import { connect } from "puppeteer-real-browser";
+import chromium from "@sparticuz/chromium";
 
 // Small delay helper
 function wait(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 // Detect if running on Render
 const isRender = process.env.RENDER === "true";
+if (isRender) process.env.CHROME_PATH = chromium.path;
 
 // Retry waiting for job cards to appear
 async function waitForJobCards(page, retries = 5, delay = 2000) {
@@ -15,7 +17,7 @@ async function waitForJobCards(page, retries = 5, delay = 2000) {
       ".job_seen_beacon, .cardOutline, div[data-jk], .jobsearch-ResultsList > li"
     );
     if (exists) return true;
-    await wait(delay); // 🔹 fixed here
+    await wait(delay);
   }
   return false;
 }
@@ -23,11 +25,10 @@ async function waitForJobCards(page, retries = 5, delay = 2000) {
 // Scroll and collect all jobs
 async function scrollAndCollectAllJobs(page, maxJobs = 100) {
   console.log("🖱️ Starting to scroll and collect jobs...");
-
   const allJobs = new Map();
   const experienceKeywords = [
     "junior", "intern", "internship", "no experience", "entry level",
-    "graduate", "trainee", "associate", "new grad", "apprentice",
+    "graduate", "trainee", "associate", "new grad", "apprentice"
   ];
 
   let currentPage = 0;
@@ -44,11 +45,8 @@ async function scrollAndCollectAllJobs(page, maxJobs = 100) {
       ".job_seen_beacon, .cardOutline, div[data-jk], .jobsearch-ResultsList > li",
       (cards, experienceKeywords) => {
         const results = [];
-
         cards.forEach((card) => {
-          const titleEl = card.querySelector(
-            "h2.jobTitle a, h2.jobTitle span[title], .jobTitle a"
-          );
+          const titleEl = card.querySelector("h2.jobTitle a, h2.jobTitle span[title], .jobTitle a");
           const title = titleEl?.innerText?.trim() || titleEl?.getAttribute("title")?.trim();
           const company = card.querySelector("[data-testid='company-name'], .companyName")?.innerText.trim() || "N/A";
           const location = card.querySelector("[data-testid='text-location'], .companyLocation")?.innerText.trim() || "N/A";
@@ -60,46 +58,36 @@ async function scrollAndCollectAllJobs(page, maxJobs = 100) {
             const lowerTitle = title.toLowerCase();
             const isRelevant = experienceKeywords.some(word => lowerTitle.includes(word));
             if (!isRelevant) return;
-
             results.push({ title, company, location, link, source: "Indeed" });
           }
         });
-
         return results;
       },
       experienceKeywords
     );
 
     const jobsBeforeAdd = allJobs.size;
-    currentJobs.forEach((job) => {
+    currentJobs.forEach(job => {
       if (!allJobs.has(job.link) && allJobs.size < maxJobs) {
         allJobs.set(job.link, job);
       }
     });
 
-    const jobsAdded = allJobs.size - jobsBeforeAdd;
-    console.log(`✨ Jobs added: ${jobsAdded}, Total unique jobs: ${allJobs.size}`);
+    console.log(`✨ Jobs added: ${allJobs.size - jobsBeforeAdd}, Total unique jobs: ${allJobs.size}`);
 
     if (allJobs.size >= maxJobs) break;
 
-    currentPage++;
-    const nextButton = await page.$(
-      'a[data-testid="pagination-page-next"], a[aria-label="Next Page"]'
-    );
-    if (!nextButton) {
-      console.log("📄 No more pages available");
-      break;
-    }
+    const nextButton = await page.$('a[data-testid="pagination-page-next"], a[aria-label="Next Page"]');
+    if (!nextButton) break;
 
     try {
       await Promise.all([
         page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 30000 }),
         nextButton.click(),
       ]);
-      console.log(`📄 Navigated to page ${currentPage + 1}`);
+      currentPage++;
       await wait(2000);
-    } catch (err) {
-      console.log("❌ Could not navigate to next page:", err.message);
+    } catch {
       break;
     }
   }
@@ -108,10 +96,11 @@ async function scrollAndCollectAllJobs(page, maxJobs = 100) {
   return Array.from(allJobs.values());
 }
 
-// Main function to fetch Indeed jobs
+// Main function
 export async function fetchIndeedJobs(keyword) {
   try {
     const { browser, page } = await connect({
+      executablePath: process.env.CHROME_PATH,
       headless: isRender,
       args: isRender
         ? ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
@@ -125,15 +114,11 @@ export async function fetchIndeedJobs(keyword) {
     await page.goto(url, { waitUntil: "networkidle2", timeout: 60000 });
     await wait(3000);
 
-    console.log("✅ Page loaded, starting job collection...");
     const jobs = await scrollAndCollectAllJobs(page, 200);
 
+    if (isRender) await browser.close();
+
     console.log(`✅ Total jobs collected: ${jobs.length}`);
-
-    if (isRender) {
-      await browser.close();
-    }
-
     return jobs;
   } catch (err) {
     console.error("❌ Error fetching Indeed jobs:", err);
