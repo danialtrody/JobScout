@@ -3,12 +3,20 @@ import chromium from "@sparticuz/chromium";
 
 // Small delay helper
 function wait(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 // Detect if running on Render
 const isRender = process.env.RENDER === "true";
-if (isRender) process.env.CHROME_PATH = chromium.path;
+
+// Set CHROME_PATH for Render or fallback to local Chrome
+if (isRender) {
+  process.env.CHROME_PATH = chromium.path;
+} else if (!process.env.CHROME_PATH) {
+  // Change this path if your local Chrome is installed elsewhere
+  process.env.CHROME_PATH =
+    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
+}
 
 // Retry waiting for job cards to appear
 async function waitForJobCards(page, retries = 5, delay = 2000) {
@@ -25,10 +33,19 @@ async function waitForJobCards(page, retries = 5, delay = 2000) {
 // Scroll and collect all jobs
 async function scrollAndCollectAllJobs(page, maxJobs = 100) {
   console.log("🖱️ Starting to scroll and collect jobs...");
+
   const allJobs = new Map();
   const experienceKeywords = [
-    "junior", "intern", "internship", "no experience", "entry level",
-    "graduate", "trainee", "associate", "new grad", "apprentice"
+    "junior",
+    "intern",
+    "internship",
+    "no experience",
+    "entry level",
+    "graduate",
+    "trainee",
+    "associate",
+    "new grad",
+    "apprentice",
   ];
 
   let currentPage = 0;
@@ -46,17 +63,30 @@ async function scrollAndCollectAllJobs(page, maxJobs = 100) {
       (cards, experienceKeywords) => {
         const results = [];
         cards.forEach((card) => {
-          const titleEl = card.querySelector("h2.jobTitle a, h2.jobTitle span[title], .jobTitle a");
-          const title = titleEl?.innerText?.trim() || titleEl?.getAttribute("title")?.trim();
-          const company = card.querySelector("[data-testid='company-name'], .companyName")?.innerText.trim() || "N/A";
-          const location = card.querySelector("[data-testid='text-location'], .companyLocation")?.innerText.trim() || "N/A";
+          const titleEl =
+            card.querySelector("h2.jobTitle a, h2.jobTitle span[title], .jobTitle a");
+          const title =
+            titleEl?.innerText?.trim() || titleEl?.getAttribute("title")?.trim();
+
+          const company =
+            card.querySelector("[data-testid='company-name'], .companyName")
+              ?.innerText.trim() || "N/A";
+
+          const location =
+            card.querySelector("[data-testid='text-location'], .companyLocation")
+              ?.innerText.trim() || "N/A";
+
           const linkEl = card.querySelector("h2.jobTitle a, .jcs-JobTitle");
           const jobId = card.getAttribute("data-jk") || linkEl?.getAttribute("data-jk");
-          const link = jobId ? `https://www.indeed.com/viewjob?jk=${jobId}` : linkEl?.href;
+          const link = jobId
+            ? `https://www.indeed.com/viewjob?jk=${jobId}`
+            : linkEl?.href;
 
           if (title && company && link) {
             const lowerTitle = title.toLowerCase();
-            const isRelevant = experienceKeywords.some(word => lowerTitle.includes(word));
+            const isRelevant = experienceKeywords.some((word) =>
+              lowerTitle.includes(word)
+            );
             if (!isRelevant) return;
             results.push({ title, company, location, link, source: "Indeed" });
           }
@@ -67,17 +97,21 @@ async function scrollAndCollectAllJobs(page, maxJobs = 100) {
     );
 
     const jobsBeforeAdd = allJobs.size;
-    currentJobs.forEach(job => {
+    currentJobs.forEach((job) => {
       if (!allJobs.has(job.link) && allJobs.size < maxJobs) {
         allJobs.set(job.link, job);
       }
     });
 
-    console.log(`✨ Jobs added: ${allJobs.size - jobsBeforeAdd}, Total unique jobs: ${allJobs.size}`);
+    console.log(
+      `✨ Jobs added: ${allJobs.size - jobsBeforeAdd}, Total unique jobs: ${allJobs.size}`
+    );
 
     if (allJobs.size >= maxJobs) break;
 
-    const nextButton = await page.$('a[data-testid="pagination-page-next"], a[aria-label="Next Page"]');
+    const nextButton = await page.$(
+      'a[data-testid="pagination-page-next"], a[aria-label="Next Page"]'
+    );
     if (!nextButton) break;
 
     try {
@@ -100,7 +134,7 @@ async function scrollAndCollectAllJobs(page, maxJobs = 100) {
 export async function fetchIndeedJobs(keyword) {
   try {
     const { browser, page } = await connect({
-      executablePath: process.env.CHROME_PATH,
+      executablePath: process.env.CHROME_PATH || undefined,
       headless: isRender,
       args: isRender
         ? ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
@@ -108,11 +142,14 @@ export async function fetchIndeedJobs(keyword) {
       turnstile: true,
     });
 
-    const url = `https://il.indeed.com/q-${encodeURIComponent(keyword)}-jobs.html?from=relatedQueries&saIdx=3&rqf=1`;
+    const url = `https://il.indeed.com/q-${encodeURIComponent(
+      keyword
+    )}-jobs.html?from=relatedQueries&saIdx=3&rqf=1`;
     console.log("🔎 Navigating to:", url);
-
     await page.goto(url, { waitUntil: "networkidle2", timeout: 60000 });
-    await wait(3000);
+
+    console.log("⏳ Waiting for the page to fully load before scrolling...");
+    await wait(5000); // optional, can increase
 
     const jobs = await scrollAndCollectAllJobs(page, 200);
 
