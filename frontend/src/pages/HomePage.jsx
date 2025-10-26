@@ -2,6 +2,7 @@ import React, { useState, useEffect ,useRef } from "react";
 import Card from "../components/Card";
 import Keyword from "../components/KeyWords";
 
+
 function HomePage() {
   // const BASE_URL = "http://localhost:3000/api/jobs";
   const BASE_URL = "/api/jobs";
@@ -19,6 +20,7 @@ function HomePage() {
     fetchRef.current = true;
   
     const getJobs = async () => {
+      setLoading(true)
       const data = await fetch(`${BASE_URL}?keyword=${position}&location=${location}`)
         .then(res => res.json())
         .catch(() => []);
