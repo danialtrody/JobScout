@@ -38,4 +38,5 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
 
-// cd frontend && npm install && npm run build && cd .. && npm install 
+// cd frontend && npm install && npm run build && cd .. && npm install (bulid)
+// node backend/server.js (start)
