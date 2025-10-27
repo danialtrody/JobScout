@@ -9,14 +9,7 @@ function wait(ms) {
 // Detect if running on Render
 const isRender = process.env.RENDER === "true";
 
-// Set CHROME_PATH for Render or fallback to local Chrome
-if (isRender) {
-  process.env.CHROME_PATH = chromium.path;
-} else if (!process.env.CHROME_PATH) {
-  // Change this path if your local Chrome is installed elsewhere
-  process.env.CHROME_PATH =
-    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
-}
+console.log("🔧 Environment:", isRender ? "RENDER" : "LOCAL");
 
 // Retry waiting for job cards to appear
 async function waitForJobCards(page, retries = 5, delay = 2000) {
@@ -132,33 +125,73 @@ async function scrollAndCollectAllJobs(page, maxJobs = 100) {
 
 // Main function
 export async function fetchIndeedJobs(keyword) {
+  let browser;
   try {
-    const { browser, page } = await connect({
-      headless: isRender,
-      args: isRender
-        ? ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage","--disable-gpu" ,'--disable-features=IsolateOrigins','--disable-site-isolation-trials'
-]
-        : [],
+    // Configure browser options based on environment
+    let browserOptions = {
+      headless: isRender ? "shell" : false,
       turnstile: true,
-    });
+    };
+
+    if (isRender) {
+      // Get the executable path
+      const executablePath = await chromium.executablePath();
+      console.log("📍 Chrome executable path:", executablePath);
+
+      browserOptions = {
+        ...browserOptions,
+        executablePath: executablePath,
+        args: [
+          ...chromium.args,
+          "--no-sandbox",
+          "--disable-setuid-sandbox",
+          "--disable-dev-shm-usage",
+          "--disable-gpu",
+          "--disable-software-rasterizer",
+          "--disable-dev-tools",
+          "--no-first-run",
+          "--no-zygote",
+          "--single-process",
+          "--disable-extensions",
+          "--disable-features=IsolateOrigins,site-per-process",
+        ],
+        ignoreHTTPSErrors: true,
+      };
+    }
+
+    console.log("🚀 Launching browser...");
+    const { browser: br, page } = await connect(browserOptions);
+    browser = br;
 
     const url = `https://il.indeed.com/q-${encodeURIComponent(
       keyword
     )}-jobs.html?from=relatedQueries&saIdx=3&rqf=1`;
     console.log("🔎 Navigating to:", url);
-    await page.goto(url, { waitUntil: "networkidle2", timeout: 60000 });
+    
+    await page.goto(url, { 
+      waitUntil: "domcontentloaded", 
+      timeout: 60000 
+    });
 
-    console.log("⏳ Waiting for the page to fully load before scrolling...");
-    await wait(10000); // optional, can increase
+    console.log("⏳ Waiting for the page to fully load...");
+    await wait(5000);
 
     const jobs = await scrollAndCollectAllJobs(page, 200);
-
-    if (isRender) await browser.close();
 
     console.log(`✅ Total jobs collected: ${jobs.length}`);
     return jobs;
   } catch (err) {
     console.error("❌ Error fetching Indeed jobs:", err);
+    console.error("Stack trace:", err.stack);
     return [];
+  } finally {
+    if (browser) {
+      try {
+        await browser.close();
+        console.log("🔒 Browser closed");
+      } catch (closeErr) {
+        console.error("⚠️ Error closing browser:", closeErr);
+      }
+    }
   }
 }

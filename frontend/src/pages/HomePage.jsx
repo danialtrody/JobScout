@@ -20,17 +20,23 @@ function HomePage() {
     fetchRef.current = true;
   
     const getJobs = async () => {
-      setLoading(true)
-      const data = await fetch(`${BASE_URL}?keyword=${position}&location=${location}`)
-        .then(res => res.json())
-        .catch(() => []);
-      setJobs(data);
-      fetchRef.current = false;
-      setLoading(false)
+      setLoading(true);
+      try {
+        const res = await fetch(`${BASE_URL}?keyword=${position}&location=${location}`);
+        const data = await res.json();
+        setJobs(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error("Error fetching jobs:", err);
+        setJobs([]);
+      } finally {
+        fetchRef.current = false;
+        setLoading(false);
+      }
     };
   
     getJobs();
   }, [position, location]);
+  
   
 
   if (loading)
