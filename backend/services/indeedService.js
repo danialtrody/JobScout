@@ -134,10 +134,10 @@ async function scrollAndCollectAllJobs(page, maxJobs = 100) {
 export async function fetchIndeedJobs(keyword) {
   try {
     const { browser, page } = await connect({
-      executablePath: process.env.CHROME_PATH || undefined,
+      executablePath: process.env.CHROME_PATH || '/usr/bin/chromium',
       headless: isRender,
       args: isRender
-        ? ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
+        ? ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage","--disable-gpu"]
         : [],
       turnstile: true,
     });
