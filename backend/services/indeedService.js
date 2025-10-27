@@ -134,10 +134,10 @@ async function scrollAndCollectAllJobs(page, maxJobs = 100) {
 export async function fetchIndeedJobs(keyword) {
   try {
     const { browser, page } = await connect({
-      executablePath: process.env.CHROME_PATH || '/usr/bin/chromium',
       headless: isRender,
       args: isRender
-        ? ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage","--disable-gpu"]
+        ? ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage","--disable-gpu" ,'--disable-features=IsolateOrigins','--disable-site-isolation-trials'
+]
         : [],
       turnstile: true,
     });
@@ -149,7 +149,7 @@ export async function fetchIndeedJobs(keyword) {
     await page.goto(url, { waitUntil: "networkidle2", timeout: 60000 });
 
     console.log("⏳ Waiting for the page to fully load before scrolling...");
-    await wait(5000); // optional, can increase
+    await wait(10000); // optional, can increase
 
     const jobs = await scrollAndCollectAllJobs(page, 200);
 
