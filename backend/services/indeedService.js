@@ -1,4 +1,4 @@
-import { connect } from "puppeteer-real-browser";
+import puppeteer from "puppeteer-core";
 import chromium from "@sparticuz/chromium";
 
 // Small delay helper
@@ -128,19 +128,16 @@ export async function fetchIndeedJobs(keyword) {
   let browser;
   try {
     // Configure browser options based on environment
-    let browserOptions = {
-      headless: isRender ? "shell" : false,
-      turnstile: true,
-    };
+    let launchOptions;
 
     if (isRender) {
       // Get the executable path
       const executablePath = await chromium.executablePath();
       console.log("📍 Chrome executable path:", executablePath);
 
-      browserOptions = {
-        ...browserOptions,
+      launchOptions = {
         executablePath: executablePath,
+        headless: chromium.headless,
         args: [
           ...chromium.args,
           "--no-sandbox",
@@ -155,22 +152,41 @@ export async function fetchIndeedJobs(keyword) {
           "--disable-extensions",
           "--disable-features=IsolateOrigins,site-per-process",
         ],
+        defaultViewport: chromium.defaultViewport,
         ignoreHTTPSErrors: true,
+      };
+    } else {
+      // Local development
+      launchOptions = {
+        executablePath: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+        headless: false,
+        args: [],
       };
     }
 
     console.log("🚀 Launching browser...");
-    const { browser: br, page } = await connect(browserOptions);
-    browser = br;
+    browser = await puppeteer.launch(launchOptions);
+    const page = await browser.newPage();
+
+    // Set a realistic user agent
+    await page.setUserAgent(
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+    );
+
+    // Set extra headers
+    await page.setExtraHTTPHeaders({
+      "Accept-Language": "en-US,en;q=0.9",
+      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+    });
 
     const url = `https://il.indeed.com/q-${encodeURIComponent(
       keyword
     )}-jobs.html?from=relatedQueries&saIdx=3&rqf=1`;
     console.log("🔎 Navigating to:", url);
-    
-    await page.goto(url, { 
-      waitUntil: "domcontentloaded", 
-      timeout: 60000 
+
+    await page.goto(url, {
+      waitUntil: "domcontentloaded",
+      timeout: 60000,
     });
 
     console.log("⏳ Waiting for the page to fully load...");
