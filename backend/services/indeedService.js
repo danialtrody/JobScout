@@ -149,7 +149,7 @@ export async function fetchIndeedJobs(keyword) {
     await page.goto(url, { waitUntil: "networkidle2", timeout: 60000 });
 
     console.log("⏳ Waiting for the page to fully load before scrolling...");
-    await wait(5000); // optional, can increase
+    await wait(10000); // optional, can increase
 
     const jobs = await scrollAndCollectAllJobs(page, 200);
 
