@@ -1,150 +1,164 @@
-// backend/services/indeedService.js
-
+import { connect } from "puppeteer-real-browser";
 import chromium from "@sparticuz/chromium";
-import puppeteer from "puppeteer"; // For local development
 
-// Detect if running on Render
-const isRender = process.env.RENDER === "true" || process.env.NODE_ENV === "production";
-
-// Helper: small delay
+// Small delay helper
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// ✅ Browser launcher that works locally + Render
-async function launchBrowser() {
-  if (!isRender) {
-    console.log("💻 Launching local Puppeteer...");
-    return await puppeteer.launch({
-      headless: true,
-      args: ["--no-sandbox", "--disable-setuid-sandbox", "--start-maximized"],
-      defaultViewport: null,
-    });
-  }
+// Detect if running on Render
+const isRender = process.env.RENDER === "true";
 
-  console.log("🧠 Launching browser on Render...");
-  const chromePath = await chromium.executablePath();
-  process.env.CHROME_PATH = chromePath;
-
-  // Must import puppeteer-real-browser **after** setting CHROME_PATH
-  const { connect } = await import("puppeteer-real-browser");
-
-  const browser = await connect({
-    headless: true,
-    executablePath: chromePath,
-    args: [
-      ...chromium.args,
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--single-process",
-      "--disable-gpu",
-    ],
-    defaultViewport: chromium.defaultViewport,
-  });
-
-  console.log("✅ Connected to browser (Render mode)!");
-  return browser;
+// Set CHROME_PATH for Render or fallback to local Chrome
+if (isRender) {
+  process.env.CHROME_PATH = chromium.path;
+} else if (!process.env.CHROME_PATH) {
+  // Change this path if your local Chrome is installed elsewhere
+  process.env.CHROME_PATH =
+    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
 }
 
-// ✅ Helper: Scroll & collect all job cards
-async function scrollAndCollectJobs(page, maxJobs = 100) {
+// Retry waiting for job cards to appear
+async function waitForJobCards(page, retries = 5, delay = 2000) {
+  for (let i = 0; i < retries; i++) {
+    const exists = await page.$(
+      ".job_seen_beacon, .cardOutline, div[data-jk], .jobsearch-ResultsList > li"
+    );
+    if (exists) return true;
+    await wait(delay);
+  }
+  return false;
+}
+
+// Scroll and collect all jobs
+async function scrollAndCollectAllJobs(page, maxJobs = 100) {
   console.log("🖱️ Starting to scroll and collect jobs...");
 
   const allJobs = new Map();
-  let scrollCount = 0;
-  let noNewJobs = 0;
+  const experienceKeywords = [
+    "junior",
+    "intern",
+    "internship",
+    "no experience",
+    "entry level",
+    "graduate",
+    "trainee",
+    "associate",
+    "new grad",
+    "apprentice",
+  ];
 
-  while (scrollCount < 50 && allJobs.size < maxJobs) {
-    const before = allJobs.size;
+  let currentPage = 0;
+  const maxPages = 10;
 
-    // Scroll down
-    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-    await wait(2500);
-
-    // Try clicking "See more jobs" buttons
-    const seeMoreButtons = await page.$$("button.infinite-scroller__show-more-button");
-    for (const btn of seeMoreButtons) {
-      try {
-        await btn.click();
-        await wait(1500);
-      } catch {}
+  while (currentPage < maxPages && allJobs.size < maxJobs) {
+    const cardsExist = await waitForJobCards(page);
+    if (!cardsExist) {
+      console.log("❌ Job cards did not appear, stopping.");
+      break;
     }
 
-    // Extract job data
-    const jobs = await page.evaluate(() => {
-      const results = [];
-      const cards = document.querySelectorAll("ul.jobs-search__results-list li, .base-card");
+    const currentJobs = await page.$$eval(
+      ".job_seen_beacon, .cardOutline, div[data-jk], .jobsearch-ResultsList > li",
+      (cards, experienceKeywords) => {
+        const results = [];
+        cards.forEach((card) => {
+          const titleEl =
+            card.querySelector("h2.jobTitle a, h2.jobTitle span[title], .jobTitle a");
+          const title =
+            titleEl?.innerText?.trim() || titleEl?.getAttribute("title")?.trim();
 
-      cards.forEach((card) => {
-        const title = card.querySelector(".base-search-card__title")?.innerText?.trim();
-        const company = card.querySelector(".base-search-card__subtitle")?.innerText?.trim();
-        const location = card.querySelector(".job-search-card__location")?.innerText?.trim();
-        const link = card.querySelector("a")?.href;
-        const date = card.querySelector(".job-search-card__listdate, .job-search-card__listdate--new")?.innerText?.trim();
+          const company =
+            card.querySelector("[data-testid='company-name'], .companyName")
+              ?.innerText.trim() || "N/A";
 
-        if (title && company && link) {
-          results.push({ title, company, location, link, dateTime: date || "N/A", source: "LinkedIn" });
-        }
-      });
+          const location =
+            card.querySelector("[data-testid='text-location'], .companyLocation")
+              ?.innerText.trim() || "N/A";
 
-      return results;
-    });
+          const linkEl = card.querySelector("h2.jobTitle a, .jcs-JobTitle");
+          const jobId = card.getAttribute("data-jk") || linkEl?.getAttribute("data-jk");
+          const link = jobId
+            ? `https://www.indeed.com/viewjob?jk=${jobId}`
+            : linkEl?.href;
 
-    jobs.forEach((job) => {
+          if (title && company && link) {
+            const lowerTitle = title.toLowerCase();
+            const isRelevant = experienceKeywords.some((word) =>
+              lowerTitle.includes(word)
+            );
+            if (!isRelevant) return;
+            results.push({ title, company, location, link, source: "Indeed" });
+          }
+        });
+        return results;
+      },
+      experienceKeywords
+    );
+
+    const jobsBeforeAdd = allJobs.size;
+    currentJobs.forEach((job) => {
       if (!allJobs.has(job.link) && allJobs.size < maxJobs) {
         allJobs.set(job.link, job);
       }
     });
 
-    const added = allJobs.size - before;
-    console.log(`✨ Added ${added} jobs. Total: ${allJobs.size}`);
+    console.log(
+      `✨ Jobs added: ${allJobs.size - jobsBeforeAdd}, Total unique jobs: ${allJobs.size}`
+    );
 
-    if (added === 0) noNewJobs++;
-    else noNewJobs = 0;
+    if (allJobs.size >= maxJobs) break;
 
-    if (noNewJobs >= 2) break;
+    const nextButton = await page.$(
+      'a[data-testid="pagination-page-next"], a[aria-label="Next Page"]'
+    );
+    if (!nextButton) break;
 
-    scrollCount++;
+    try {
+      await Promise.all([
+        page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 30000 }),
+        nextButton.click(),
+      ]);
+      currentPage++;
+      await wait(2000);
+    } catch {
+      break;
+    }
   }
 
-  console.log("✅ Finished collecting jobs!");
+  console.log("🎉 Finished collecting jobs!");
   return Array.from(allJobs.values());
 }
 
-// ✅ Main: fetch LinkedIn/Indeed jobs
-export async function fetchLinkedInJobs(keyword, location) {
-  let browser;
+// Main function
+export async function fetchIndeedJobs(keyword) {
   try {
-    browser = await launchBrowser();
-    const page = await browser.newPage();
-
-    await page.setRequestInterception(true);
-    page.on("request", (req) => {
-      const blocked = ["image", "font", "media"];
-      if (blocked.includes(req.resourceType())) req.abort();
-      else req.continue();
+    const { browser, page } = await connect({
+      executablePath: process.env.CHROME_PATH || undefined,
+      headless: isRender,
+      args: isRender
+        ? ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
+        : [],
+      turnstile: true,
     });
 
-    const url = `https://www.linkedin.com/jobs/search/?keywords=${encodeURIComponent(
+    const url = `https://il.indeed.com/q-${encodeURIComponent(
       keyword
-    )}&location=${encodeURIComponent(location)}&f_TPR=r86400&f_E=1,2&sortBy=DD`;
+    )}-jobs.html?from=relatedQueries&saIdx=3&rqf=1`;
+    console.log("🔎 Navigating to:", url);
+    await page.goto(url, { waitUntil: "networkidle2", timeout: 60000 });
 
-    console.log("🌍 Navigating to:", url);
-    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60000 });
-    await page.waitForSelector("ul.jobs-search__results-list li, .base-card", { timeout: 30000 });
+    console.log("⏳ Waiting for the page to fully load before scrolling...");
+    await wait(5000); // optional, can increase
 
-    console.log("✅ Page loaded. Collecting jobs...");
-    const jobs = await scrollAndCollectJobs(page, 200);
+    const jobs = await scrollAndCollectAllJobs(page, 200);
 
-    console.log(`🎉 Collected ${jobs.length} jobs!`);
+    if (isRender) await browser.close();
+
+    console.log(`✅ Total jobs collected: ${jobs.length}`);
     return jobs;
   } catch (err) {
-    console.error("❌ Error fetching jobs:", err);
+    console.error("❌ Error fetching Indeed jobs:", err);
     return [];
-  } finally {
-    try {
-      if (browser) await browser.close();
-    } catch {}
   }
 }
