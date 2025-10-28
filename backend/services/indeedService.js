@@ -6,16 +6,16 @@ function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// Detect if running on Render
-const isRender = process.env.RENDER === "true";
+const isRender = !!process.env.RENDER;
 
-// Set CHROME_PATH for Render or fallback to local Chrome
-if (isRender) {
-  process.env.CHROME_PATH = chromium.path;
-} else if (!process.env.CHROME_PATH) {
-  // Change this path if your local Chrome is installed elsewhere
-  process.env.CHROME_PATH =
-    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
+// ✅ Properly set CHROME_PATH for Render (no top-level await)
+async function ensureChromePath() {
+  if (isRender) {
+    process.env.CHROME_PATH = await chromium.executablePath();
+  } else if (!process.env.CHROME_PATH) {
+    process.env.CHROME_PATH =
+      "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
+  }
 }
 
 // Retry waiting for job cards to appear
@@ -133,13 +133,23 @@ async function scrollAndCollectAllJobs(page, maxJobs = 100) {
 // Main function
 export async function fetchIndeedJobs(keyword) {
   try {
+    // ✅ ensure CHROME_PATH before launching browser
+    await ensureChromePath();
+
     const { browser, page } = await connect({
       headless: isRender,
       args: isRender
-        ? ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage","--disable-gpu" ,'--disable-features=IsolateOrigins','--disable-site-isolation-trials'
-]
+        ? [
+            "--no-sandbox",
+            "--disable-setuid-sandbox",
+            "--disable-dev-shm-usage",
+            "--disable-gpu",
+            "--disable-features=IsolateOrigins",
+            "--disable-site-isolation-trials",
+          ]
         : [],
       turnstile: true,
+      executablePath: process.env.CHROME_PATH,
     });
 
     const url = `https://il.indeed.com/q-${encodeURIComponent(
@@ -149,7 +159,7 @@ export async function fetchIndeedJobs(keyword) {
     await page.goto(url, { waitUntil: "networkidle2", timeout: 60000 });
 
     console.log("⏳ Waiting for the page to fully load before scrolling...");
-    await wait(10000); // optional, can increase
+    await wait(10000);
 
     const jobs = await scrollAndCollectAllJobs(page, 200);
 
