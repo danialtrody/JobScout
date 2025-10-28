@@ -6,31 +6,38 @@ function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// Detect if running on Render
 const isRender = !!process.env.RENDER;
 
-// ✅ Properly set CHROME_PATH for Render (no top-level await)
-async function ensureChromePath() {
-  if (isRender) {
+// ✅ Properly set CHROME_PATH for Render
+if (isRender) {
+  const setChromePath = async () => {
     process.env.CHROME_PATH = await chromium.executablePath();
-  } else if (!process.env.CHROME_PATH) {
-    process.env.CHROME_PATH =
-      "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
-  }
+  };
+  await setChromePath();
+} else if (!process.env.CHROME_PATH) {
+  process.env.CHROME_PATH =
+    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
 }
 
-// Retry waiting for job cards to appear
-async function waitForJobCards(page, retries = 5, delay = 2000) {
+// ✅ Wait until job cards appear (robust retry system)
+async function waitForJobCards(page, retries = 10, delay = 2000) {
   for (let i = 0; i < retries; i++) {
-    const exists = await page.$(
-      ".job_seen_beacon, .cardOutline, div[data-jk], .jobsearch-ResultsList > li"
+    const cards = await page.$$(
+      '.job_seen_beacon, .jobCard_mainContent, [data-testid="jobTitle"], .resultContent'
     );
-    if (exists) return true;
-    await wait(delay);
+    if (cards.length > 0) {
+      console.log(`✅ Found ${cards.length} job cards after ${i + 1} tries`);
+      return true;
+    }
+    console.log(`⏳ Job cards not found yet (attempt ${i + 1}/${retries})...`);
+    await wait(delay); // ✅ replaced page.waitForTimeout
   }
+  console.log("❌ Job cards did not appear, stopping.");
   return false;
 }
 
-// Scroll and collect all jobs
+// ✅ Scroll and collect all jobs
 async function scrollAndCollectAllJobs(page, maxJobs = 100) {
   console.log("🖱️ Starting to scroll and collect jobs...");
 
@@ -53,13 +60,10 @@ async function scrollAndCollectAllJobs(page, maxJobs = 100) {
 
   while (currentPage < maxPages && allJobs.size < maxJobs) {
     const cardsExist = await waitForJobCards(page);
-    if (!cardsExist) {
-      console.log("❌ Job cards did not appear, stopping.");
-      break;
-    }
+    if (!cardsExist) break;
 
     const currentJobs = await page.$$eval(
-      ".job_seen_beacon, .cardOutline, div[data-jk], .jobsearch-ResultsList > li",
+      ".job_seen_beacon, .jobCard_mainContent, [data-testid='jobTitle'], .resultContent",
       (cards, experienceKeywords) => {
         const results = [];
         cards.forEach((card) => {
@@ -87,8 +91,8 @@ async function scrollAndCollectAllJobs(page, maxJobs = 100) {
             const isRelevant = experienceKeywords.some((word) =>
               lowerTitle.includes(word)
             );
-            if (!isRelevant) return;
-            results.push({ title, company, location, link, source: "Indeed" });
+            if (isRelevant)
+              results.push({ title, company, location, link, source: "Indeed" });
           }
         });
         return results;
@@ -130,12 +134,9 @@ async function scrollAndCollectAllJobs(page, maxJobs = 100) {
   return Array.from(allJobs.values());
 }
 
-// Main function
+// ✅ Main function
 export async function fetchIndeedJobs(keyword) {
   try {
-    // ✅ ensure CHROME_PATH before launching browser
-    await ensureChromePath();
-
     const { browser, page } = await connect({
       headless: isRender,
       args: isRender
@@ -149,17 +150,26 @@ export async function fetchIndeedJobs(keyword) {
           ]
         : [],
       turnstile: true,
-      executablePath: process.env.CHROME_PATH,
     });
+
+    // Pretend to be a real browser (avoid bot detection)
+    await page.setUserAgent(
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
+        "AppleWebKit/537.36 (KHTML, like Gecko) " +
+        "Chrome/131.0.0.0 Safari/537.36"
+    );
+    await page.setViewport({ width: 1366, height: 768 });
+    await page.setJavaScriptEnabled(true);
 
     const url = `https://il.indeed.com/q-${encodeURIComponent(
       keyword
     )}-jobs.html?from=relatedQueries&saIdx=3&rqf=1`;
     console.log("🔎 Navigating to:", url);
+
     await page.goto(url, { waitUntil: "networkidle2", timeout: 60000 });
 
-    console.log("⏳ Waiting for the page to fully load before scrolling...");
-    await wait(10000);
+    console.log("⏳ Waiting for job cards to appear...");
+    await waitForJobCards(page);
 
     const jobs = await scrollAndCollectAllJobs(page, 200);
 
