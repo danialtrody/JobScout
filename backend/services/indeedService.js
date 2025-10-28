@@ -1,4 +1,4 @@
-import puppeteer from "puppeteer-core";
+import { connect } from "puppeteer-real-browser";
 import chromium from "@sparticuz/chromium";
 
 // Small delay helper
@@ -9,7 +9,14 @@ function wait(ms) {
 // Detect if running on Render
 const isRender = process.env.RENDER === "true";
 
-console.log("🔧 Environment:", isRender ? "RENDER" : "LOCAL");
+// Set CHROME_PATH for Render or fallback to local Chrome
+if (isRender) {
+  process.env.CHROME_PATH = chromium.path;
+} else if (!process.env.CHROME_PATH) {
+  // Change this path if your local Chrome is installed elsewhere
+  process.env.CHROME_PATH =
+    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
+}
 
 // Retry waiting for job cards to appear
 async function waitForJobCards(page, retries = 5, delay = 2000) {
@@ -125,89 +132,33 @@ async function scrollAndCollectAllJobs(page, maxJobs = 100) {
 
 // Main function
 export async function fetchIndeedJobs(keyword) {
-  let browser;
   try {
-    // Configure browser options based on environment
-    let launchOptions;
-
-    if (isRender) {
-      // Get the executable path
-      const executablePath = await chromium.executablePath();
-      console.log("📍 Chrome executable path:", executablePath);
-
-      launchOptions = {
-        executablePath: executablePath,
-        headless: chromium.headless,
-        args: [
-          ...chromium.args,
-          "--no-sandbox",
-          "--disable-setuid-sandbox",
-          "--disable-dev-shm-usage",
-          "--disable-gpu",
-          "--disable-software-rasterizer",
-          "--disable-dev-tools",
-          "--no-first-run",
-          "--no-zygote",
-          "--single-process",
-          "--disable-extensions",
-          "--disable-features=IsolateOrigins,site-per-process",
-        ],
-        defaultViewport: chromium.defaultViewport,
-        ignoreHTTPSErrors: true,
-      };
-    } else {
-      // Local development
-      launchOptions = {
-        executablePath: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
-        headless: false,
-        args: [],
-      };
-    }
-
-    console.log("🚀 Launching browser...");
-    browser = await puppeteer.launch(launchOptions);
-    const page = await browser.newPage();
-
-    // Set a realistic user agent
-    await page.setUserAgent(
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-    );
-
-    // Set extra headers
-    await page.setExtraHTTPHeaders({
-      "Accept-Language": "en-US,en;q=0.9",
-      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+    const { browser, page } = await connect({
+      headless: isRender,
+      args: isRender
+        ? ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage","--disable-gpu" ,'--disable-features=IsolateOrigins','--disable-site-isolation-trials'
+]
+        : [],
+      turnstile: true,
     });
 
     const url = `https://il.indeed.com/q-${encodeURIComponent(
       keyword
     )}-jobs.html?from=relatedQueries&saIdx=3&rqf=1`;
     console.log("🔎 Navigating to:", url);
+    await page.goto(url, { waitUntil: "networkidle2", timeout: 60000 });
 
-    await page.goto(url, {
-      waitUntil: "domcontentloaded",
-      timeout: 60000,
-    });
-
-    console.log("⏳ Waiting for the page to fully load...");
-    await wait(5000);
+    console.log("⏳ Waiting for the page to fully load before scrolling...");
+    await wait(10000); // optional, can increase
 
     const jobs = await scrollAndCollectAllJobs(page, 200);
+
+    if (isRender) await browser.close();
 
     console.log(`✅ Total jobs collected: ${jobs.length}`);
     return jobs;
   } catch (err) {
     console.error("❌ Error fetching Indeed jobs:", err);
-    console.error("Stack trace:", err.stack);
     return [];
-  } finally {
-    if (browser) {
-      try {
-        await browser.close();
-        console.log("🔒 Browser closed");
-      } catch (closeErr) {
-        console.error("⚠️ Error closing browser:", closeErr);
-      }
-    }
   }
 }

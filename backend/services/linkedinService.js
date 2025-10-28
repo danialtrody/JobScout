@@ -1,4 +1,4 @@
-import puppeteer from 'puppeteer-core';
+import puppeteer from "puppeteer";
 import puppeteerCore from "puppeteer-core";
 import chromium from "@sparticuz/chromium";
 
@@ -125,7 +125,7 @@ export async function fetchLinkedInJobs(keyword, location) {
       browser = await puppeteerToUse.launch(
         isLocal
           ? {
-              headless: true,
+              headless: !isLocal,
               args: ["--no-sandbox", "--disable-setuid-sandbox", "--start-maximized"],
               defaultViewport: null,
             }
