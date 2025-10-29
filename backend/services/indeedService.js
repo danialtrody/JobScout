@@ -137,7 +137,7 @@ async function scrollAndCollectAllJobs(page, maxJobs = 100) {
       console.log("✅ Navigated to next page.");
       await wait(2000);
     } catch (err) {
-      console.log("❌ Error navigating to next page:", err);
+      console.log("❌ Error navigating to next page:", err);ש
       break;
     }
   }
