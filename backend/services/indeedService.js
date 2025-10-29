@@ -9,14 +9,13 @@ function wait(ms) {
 // Detect if running on Render
 const isRender = process.env.RENDER === "true";
 
-// Ensure CHROME_PATH is set correctly
-async function ensureChromePath() {
-  if (isRender) {
-    process.env.CHROME_PATH = await chromium.executablePath();
-  } else if (!process.env.CHROME_PATH) {
-    process.env.CHROME_PATH =
-      "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
-  }
+// Set CHROME_PATH for Render or fallback to local Chrome
+if (isRender) {
+  process.env.CHROME_PATH = chromium.path;
+} else if (!process.env.CHROME_PATH) {
+  // Change this path if your local Chrome is installed elsewhere
+  process.env.CHROME_PATH =
+    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
 }
 
 // Retry waiting for job cards to appear
@@ -31,19 +30,38 @@ async function waitForJobCards(page, retries = 5, delay = 2000) {
   return false;
 }
 
-// Scroll and collect jobs
+// Scroll and collect all jobs
 async function scrollAndCollectAllJobs(page, maxJobs = 100) {
   console.log("🖱️ Starting to scroll and collect jobs...");
 
   const allJobs = new Map();
   const experienceKeywords = [
-    "junior","intern","internship","no experience","entry level",
-    "graduate","trainee","associate","new grad","apprentice",
-    "fresh graduate","recent graduate","recent grad","beginner",
-    "starter","novice","first job","early career","graduate trainee",
-    "graduate program","cadet","probationary","junior developer","junior engineer"
+    "junior",
+    "intern",
+    "internship",
+    "no experience",
+    "entry level",
+    "graduate",
+    "trainee",
+    "associate",
+    "new grad",
+    "apprentice",
+    "fresh graduate",
+    "recent graduate",
+    "recent grad",
+    "beginner",
+    "starter",
+    "novice",
+    "first job",
+    "early career",
+    "graduate trainee",
+    "graduate program",
+    "cadet",
+    "probationary",
+    "junior developer",
+    "junior engineer",
   ];
-
+  
   let currentPage = 0;
   const maxPages = 10;
 
@@ -126,10 +144,7 @@ async function scrollAndCollectAllJobs(page, maxJobs = 100) {
   return Array.from(allJobs.values());
 }
 
-// Main function
 export async function fetchIndeedJobs(keyword) {
-  await ensureChromePath();
-
   try {
     const { browser, page } = await connect({
       headless: isRender,
@@ -143,7 +158,7 @@ export async function fetchIndeedJobs(keyword) {
             "--disable-site-isolation-trials",
           ]
         : [],
-      turnstile: true, // ✅ bypass Turnstile bot check
+      turnstile: true,
     });
 
     // Sort by date and show jobs from last 24 hours
