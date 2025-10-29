@@ -10,23 +10,29 @@ const isRender = !!process.env.RENDER;
 
 // ✅ Properly set CHROME_PATH for Render (no top-level await)
 async function ensureChromePath() {
+  console.log("🔧 Ensuring Chrome path...");
   if (isRender) {
     process.env.CHROME_PATH = await chromium.executablePath();
+    console.log("✅ Chrome path set for Render:", process.env.CHROME_PATH);
   } else if (!process.env.CHROME_PATH) {
     process.env.CHROME_PATH =
       "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
+    console.log("✅ Chrome path set for local:", process.env.CHROME_PATH);
   }
 }
 
 // Retry waiting for job cards to appear
 async function waitForJobCards(page, retries = 5, delay = 2000) {
+  console.log("⏳ Waiting for job cards to appear...");
   for (let i = 0; i < retries; i++) {
     const exists = await page.$(
       ".job_seen_beacon, .cardOutline, div[data-jk], .jobsearch-ResultsList > li"
     );
+    console.log(`🔄 Attempt ${i + 1}/${retries}, cards found: ${!!exists}`);
     if (exists) return true;
     await wait(delay);
   }
+  console.log("❌ Job cards not found after retries");
   return false;
 }
 
@@ -52,12 +58,14 @@ async function scrollAndCollectAllJobs(page, maxJobs = 100) {
   const maxPages = 10;
 
   while (currentPage < maxPages && allJobs.size < maxJobs) {
+    console.log(`📄 On page ${currentPage + 1}...`);
     const cardsExist = await waitForJobCards(page);
     if (!cardsExist) {
       console.log("❌ Job cards did not appear, stopping.");
       break;
     }
 
+    console.log("🔍 Collecting jobs from the current page...");
     const currentJobs = await page.$$eval(
       ".job_seen_beacon, .cardOutline, div[data-jk], .jobsearch-ResultsList > li",
       (cards, experienceKeywords) => {
@@ -96,6 +104,7 @@ async function scrollAndCollectAllJobs(page, maxJobs = 100) {
       experienceKeywords
     );
 
+    console.log(`🔹 Found ${currentJobs.length} relevant jobs on this page.`);
     const jobsBeforeAdd = allJobs.size;
     currentJobs.forEach((job) => {
       if (!allJobs.has(job.link) && allJobs.size < maxJobs) {
@@ -109,19 +118,26 @@ async function scrollAndCollectAllJobs(page, maxJobs = 100) {
 
     if (allJobs.size >= maxJobs) break;
 
+    console.log("➡️ Looking for next page button...");
     const nextButton = await page.$(
       'a[data-testid="pagination-page-next"], a[aria-label="Next Page"]'
     );
-    if (!nextButton) break;
+    if (!nextButton) {
+      console.log("❌ No next page button found, stopping.");
+      break;
+    }
 
     try {
+      console.log("⏳ Clicking next page...");
       await Promise.all([
         page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 30000 }),
         nextButton.click(),
       ]);
       currentPage++;
+      console.log("✅ Navigated to next page.");
       await wait(2000);
-    } catch {
+    } catch (err) {
+      console.log("❌ Error navigating to next page:", err);
       break;
     }
   }
@@ -132,10 +148,12 @@ async function scrollAndCollectAllJobs(page, maxJobs = 100) {
 
 // Main function
 export async function fetchIndeedJobs(keyword) {
+  console.log("🚀 Starting job fetch for keyword:", keyword);
   try {
     // ✅ ensure CHROME_PATH before launching browser
     await ensureChromePath();
 
+    console.log("🌐 Launching browser...");
     const { browser, page } = await connect({
       headless: isRender,
       args: isRender
@@ -163,7 +181,10 @@ export async function fetchIndeedJobs(keyword) {
 
     const jobs = await scrollAndCollectAllJobs(page, 200);
 
-    if (isRender) await browser.close();
+    if (isRender) {
+      console.log("🛑 Closing browser (Render environment)...");
+      await browser.close();
+    }
 
     console.log(`✅ Total jobs collected: ${jobs.length}`);
     return jobs;
