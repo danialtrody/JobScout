@@ -12,13 +12,29 @@ const isRender = !!process.env.RENDER;
 async function ensureChromePath() {
   console.log("🔧 Ensuring Chrome path...");
   if (isRender) {
-    process.env.CHROME_PATH = await chromium.executablePath();
-    console.log("✅ Chrome path set for Render:", process.env.CHROME_PATH);
+    const chromePath = await chromium.executablePath();
+    process.env.CHROME_PATH = chromePath;
+    console.log("✅ Chrome path set for Render:", chromePath);
   } else if (!process.env.CHROME_PATH) {
     process.env.CHROME_PATH =
       "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
     console.log("✅ Chrome path set for local:", process.env.CHROME_PATH);
   }
+}
+
+// 🧠 Attach browser debug listeners
+function attachDebugListeners(page) {
+  page.on("console", (msg) => console.log("🧠 BROWSER LOG:", msg.text()));
+  page.on("response", (res) => {
+    const status = res.status();
+    if (res.url().includes("indeed.com"))
+      console.log(`📡 RESPONSE: ${status} → ${res.url()}`);
+  });
+  page.on("requestfailed", (req) => {
+    console.log(
+      `❌ REQUEST FAILED: ${req.url()} - ${req.failure()?.errorText || "unknown"}`
+    );
+  });
 }
 
 // Retry waiting for job cards to appear
@@ -32,7 +48,21 @@ async function waitForJobCards(page, retries = 5, delay = 2000) {
     if (exists) return true;
     await wait(delay);
   }
+
   console.log("❌ Job cards not found after retries");
+
+  // 🧾 Dump HTML snapshot for debugging
+  const html = await page.content();
+  console.log("🧾 PAGE SNAPSHOT (first 1000 chars):\n", html.slice(0, 1000));
+
+  // 🖼 Save screenshot for Render
+  try {
+    await page.screenshot({ path: "/tmp/debug.png", fullPage: true });
+    console.log("🖼 Screenshot saved at /tmp/debug.png");
+  } catch (err) {
+    console.log("⚠️ Could not save screenshot:", err.message);
+  }
+
   return false;
 }
 
@@ -85,7 +115,8 @@ async function scrollAndCollectAllJobs(page, maxJobs = 100) {
               ?.innerText.trim() || "N/A";
 
           const linkEl = card.querySelector("h2.jobTitle a, .jcs-JobTitle");
-          const jobId = card.getAttribute("data-jk") || linkEl?.getAttribute("data-jk");
+          const jobId =
+            card.getAttribute("data-jk") || linkEl?.getAttribute("data-jk");
           const link = jobId
             ? `https://www.indeed.com/viewjob?jk=${jobId}`
             : linkEl?.href;
@@ -137,7 +168,7 @@ async function scrollAndCollectAllJobs(page, maxJobs = 100) {
       console.log("✅ Navigated to next page.");
       await wait(2000);
     } catch (err) {
-      console.log("❌ Error navigating to next page:", err);ש
+      console.log("❌ Error navigating to next page:", err.message);
       break;
     }
   }
@@ -146,11 +177,10 @@ async function scrollAndCollectAllJobs(page, maxJobs = 100) {
   return Array.from(allJobs.values());
 }
 
-// Main function
+// 🧭 Main function
 export async function fetchIndeedJobs(keyword) {
   console.log("🚀 Starting job fetch for keyword:", keyword);
   try {
-    // ✅ ensure CHROME_PATH before launching browser
     await ensureChromePath();
 
     console.log("🌐 Launching browser...");
@@ -164,20 +194,35 @@ export async function fetchIndeedJobs(keyword) {
             "--disable-gpu",
             "--disable-features=IsolateOrigins",
             "--disable-site-isolation-trials",
+            "--single-process",
+            "--ignore-certificate-errors",
+            "--window-size=1920,1080",
           ]
         : [],
       turnstile: true,
       executablePath: process.env.CHROME_PATH,
     });
 
+    attachDebugListeners(page);
+
+    // 🧍‍♂️ Simulate human-like interaction
+    await page.setUserAgent(
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+    );
+
     const url = `https://il.indeed.com/q-${encodeURIComponent(
       keyword
     )}-jobs.html?from=relatedQueries&saIdx=3&rqf=1`;
+
     console.log("🔎 Navigating to:", url);
     await page.goto(url, { waitUntil: "networkidle2", timeout: 60000 });
 
     console.log("⏳ Waiting for the page to fully load before scrolling...");
-    await wait(10000);
+    await wait(8000);
+
+    // Move mouse slightly (human behavior)
+    await page.mouse.move(100, 200);
+    await page.mouse.wheel({ deltaY: 500 });
 
     const jobs = await scrollAndCollectAllJobs(page, 200);
 
