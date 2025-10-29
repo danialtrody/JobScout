@@ -1,68 +1,107 @@
-import puppeteer from "puppeteer-extra";
-import StealthPlugin from "puppeteer-extra-plugin-stealth";
+import { connect } from "puppeteer-real-browser";
 import chromium from "@sparticuz/chromium";
-
-puppeteer.use(StealthPlugin());
 
 // Small delay helper
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-const isRender = !!process.env.RENDER;
+// Detect if running on Render
+const isRender = process.env.RENDER === "true";
 
-// ✅ Properly set CHROME_PATH for Render
-async function ensureChromePath() {
-  console.log("🔧 Ensuring Chrome path...");
-  if (isRender) {
-    process.env.CHROME_PATH = await chromium.executablePath();
-    console.log("✅ Chrome path set for Render:", process.env.CHROME_PATH);
-  } else if (!process.env.CHROME_PATH) {
-    process.env.CHROME_PATH = "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
-    console.log("✅ Chrome path set for local:", process.env.CHROME_PATH);
+// Set CHROME_PATH for Render or fallback to local Chrome
+if (isRender) {
+  process.env.CHROME_PATH = chromium.path;
+} else if (!process.env.CHROME_PATH) {
+  // Change this path if your local Chrome is installed elsewhere
+  process.env.CHROME_PATH =
+    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
+}
+
+// Retry waiting for job cards to appear
+async function waitForJobCards(page, retries = 5, delay = 2000) {
+  for (let i = 0; i < retries; i++) {
+    const exists = await page.$(
+      ".job_seen_beacon, .cardOutline, div[data-jk], .jobsearch-ResultsList > li"
+    );
+    if (exists) return true;
+    await wait(delay);
   }
+  return false;
 }
 
-// 🧠 Attach browser debug listeners
-function attachDebugListeners(page) {
-  page.on("console", (msg) => console.log("🧠 BROWSER LOG:", msg.text()));
-  page.on("response", (res) => {
-    if (res.url().includes("indeed.com")) {
-      console.log(`📡 RESPONSE: ${res.status()} → ${res.url()}`);
-    }
-  });
-  page.on("requestfailed", (req) => {
-    console.log(`❌ REQUEST FAILED: ${req.url()} - ${req.failure()?.errorText || "unknown"}`);
-  });
-}
-
-// Scroll and collect jobs (simplified for Render)
+// Scroll and collect all jobs
 async function scrollAndCollectAllJobs(page, maxJobs = 100) {
+  console.log("🖱️ Starting to scroll and collect jobs...");
+
   const allJobs = new Map();
-  const experienceKeywords = ["junior","intern","internship","no experience","entry level","graduate","trainee","associate","new grad","apprentice"];
+  const experienceKeywords = [
+    "junior",
+    "intern",
+    "internship",
+    "no experience",
+    "entry level",
+    "graduate",
+    "trainee",
+    "associate",
+    "new grad",
+    "apprentice",
+    "fresh graduate",
+    "recent graduate",
+    "recent grad",
+    "beginner",
+    "starter",
+    "novice",
+    "first job",
+    "early career",
+    "graduate trainee",
+    "graduate program",
+    "cadet",
+    "probationary",
+    "junior developer",
+    "junior engineer",
+  ];
+  
   let currentPage = 0;
   const maxPages = 10;
 
   while (currentPage < maxPages && allJobs.size < maxJobs) {
-    const cardsExist = await page.$(".job_seen_beacon, .cardOutline, div[data-jk], .jobsearch-ResultsList > li");
-    if (!cardsExist) break;
+    const cardsExist = await waitForJobCards(page);
+    if (!cardsExist) {
+      console.log("❌ Job cards did not appear, stopping.");
+      break;
+    }
 
     const currentJobs = await page.$$eval(
       ".job_seen_beacon, .cardOutline, div[data-jk], .jobsearch-ResultsList > li",
       (cards, experienceKeywords) => {
         const results = [];
         cards.forEach((card) => {
-          const titleEl = card.querySelector("h2.jobTitle a, h2.jobTitle span[title], .jobTitle a");
-          const title = titleEl?.innerText?.trim() || titleEl?.getAttribute("title")?.trim();
-          const company = card.querySelector("[data-testid='company-name'], .companyName")?.innerText.trim() || "N/A";
-          const location = card.querySelector("[data-testid='text-location'], .companyLocation")?.innerText.trim() || "N/A";
+          const titleEl =
+            card.querySelector("h2.jobTitle a, h2.jobTitle span[title], .jobTitle a");
+          const title =
+            titleEl?.innerText?.trim() || titleEl?.getAttribute("title")?.trim();
+
+          const company =
+            card.querySelector("[data-testid='company-name'], .companyName")
+              ?.innerText.trim() || "N/A";
+
+          const location =
+            card.querySelector("[data-testid='text-location'], .companyLocation")
+              ?.innerText.trim() || "N/A";
+
           const linkEl = card.querySelector("h2.jobTitle a, .jcs-JobTitle");
           const jobId = card.getAttribute("data-jk") || linkEl?.getAttribute("data-jk");
-          const link = jobId ? `https://www.indeed.com/viewjob?jk=${jobId}` : linkEl?.href;
+          const link = jobId
+            ? `https://www.indeed.com/viewjob?jk=${jobId}`
+            : linkEl?.href;
 
           if (title && company && link) {
             const lowerTitle = title.toLowerCase();
-            if (!experienceKeywords.some((word) => lowerTitle.includes(word))) return;
+            const isRelevant = experienceKeywords.some((word) =>
+              lowerTitle.includes(word)
+            );
+            if (!isRelevant) return;
             results.push({ title, company, location, link, source: "Indeed" });
           }
         });
@@ -71,69 +110,73 @@ async function scrollAndCollectAllJobs(page, maxJobs = 100) {
       experienceKeywords
     );
 
+    const jobsBeforeAdd = allJobs.size;
     currentJobs.forEach((job) => {
-      if (!allJobs.has(job.link) && allJobs.size < maxJobs) allJobs.set(job.link, job);
+      if (!allJobs.has(job.link) && allJobs.size < maxJobs) {
+        allJobs.set(job.link, job);
+      }
     });
 
-    const nextButton = await page.$('a[data-testid="pagination-page-next"], a[aria-label="Next Page"]');
+    console.log(
+      `✨ Jobs added: ${allJobs.size - jobsBeforeAdd}, Total unique jobs: ${allJobs.size}`
+    );
+
+    if (allJobs.size >= maxJobs) break;
+
+    const nextButton = await page.$(
+      'a[data-testid="pagination-page-next"], a[aria-label="Next Page"]'
+    );
     if (!nextButton) break;
 
     try {
-      await Promise.all([page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 30000 }), nextButton.click()]);
+      await Promise.all([
+        page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 30000 }),
+        nextButton.click(),
+      ]);
       currentPage++;
-      await wait(2000 + Math.random() * 2000);
+      await wait(2000);
     } catch {
       break;
     }
   }
 
+  console.log("🎉 Finished collecting jobs!");
   return Array.from(allJobs.values());
 }
 
-// 🧭 Main function
 export async function fetchIndeedJobs(keyword) {
   try {
-    await ensureChromePath();
-
-    const browser = await puppeteer.launch({
+    const { browser, page } = await connect({
       headless: isRender,
-      executablePath: process.env.CHROME_PATH,
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-gpu",
-        "--disable-features=IsolateOrigins,site-per-process",
-        "--single-process",
-        "--ignore-certificate-errors",
-        "--window-size=1920,1080",
-      ],
+      args: isRender
+        ? [
+            "--no-sandbox",
+            "--disable-setuid-sandbox",
+            "--disable-dev-shm-usage",
+            "--disable-gpu",
+            "--disable-features=IsolateOrigins",
+            "--disable-site-isolation-trials",
+          ]
+        : [],
+      turnstile: true,
     });
 
-    const page = await browser.newPage();
-    attachDebugListeners(page);
+    // Sort by date and show jobs from last 24 hours
+    const url = `https://il.indeed.com/q-${encodeURIComponent(
+      keyword
+    )}-jobs.html?from=relatedQueries&saIdx=3&rqf=1&sort=date&fromage=1`;
 
-    // Human-like behavior
-    await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36");
-    await page.setViewport({ width: 1920, height: 1080 });
-    await page.evaluateOnNewDocument(() => {
-      Object.defineProperty(navigator, "webdriver", { get: () => false });
-      window.chrome = { runtime: {} };
-      Object.defineProperty(navigator, "languages", { get: () => ["en-US","en"] });
-      Object.defineProperty(navigator, "plugins", { get: () => [1,2,3,4,5] });
-    });
-
-    const url = `https://il.indeed.com/q-${encodeURIComponent(keyword)}-jobs.html?from=relatedQueries&saIdx=3&rqf=1`;
+    console.log("🔎 Navigating to:", url);
     await page.goto(url, { waitUntil: "networkidle2", timeout: 60000 });
-    await wait(3000 + Math.random() * 3000);
 
-    await page.mouse.move(100, 200);
-    await page.mouse.wheel({ deltaY: 500 });
-    await wait(2000 + Math.random() * 2000);
+    console.log("⏳ Waiting for the page to fully load before scrolling...");
+    await wait(10000);
 
     const jobs = await scrollAndCollectAllJobs(page, 200);
 
-    await browser.close();
+    if (isRender) await browser.close();
+
+    console.log(`✅ Total jobs collected: ${jobs.length}`);
     return jobs;
   } catch (err) {
     console.error("❌ Error fetching Indeed jobs:", err);
