@@ -4,11 +4,8 @@ import Keyword from "../components/KeyWords";
 
 
 function HomePage() {
-
-  const isRender = process.env.RENDER === "true";
-
-  // const BASE_URL = "http://localhost:3000/api/jobs";
-  const BASE_URL = isRender? "/api/jobs":"http://localhost:3000/api/jobs";
+  const BASE_URL = "http://localhost:3000/api/jobs";
+  // const BASE_URL = "/api/jobs";
 
 
   const [jobs, setJobs] = useState([]);
