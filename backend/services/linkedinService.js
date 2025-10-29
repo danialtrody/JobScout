@@ -1,9 +1,15 @@
 import puppeteer from "puppeteer";
 import puppeteerCore from "puppeteer-core";
 import chromium from "@sparticuz/chromium";
+import StealthPlugin from "puppeteer-extra-plugin-stealth";
+import puppeteerExtra from "puppeteer-extra";
 
 let browser;
 const isLocal = process.env.NODE_ENV !== "production";
+
+// Use Puppeteer Extra with Stealth
+const puppeteerToUse = isLocal ? puppeteer : puppeteerCore;
+if (!isLocal) puppeteerExtra.use(StealthPlugin());
 
 // Convert LinkedIn relative dates to actual Date objects
 function parseLinkedInDate(dateStr) {
@@ -34,7 +40,6 @@ function wait(ms) {
 // Scroll and collect all jobs
 async function scrollAndCollectAllJobs(page, maxJobs = 200) {
   console.log("🖱️ Starting to scroll and collect jobs...");
-
   const allJobs = new Map();
   let scrollAttempts = 0;
   const maxScrollAttempts = 50;
@@ -47,7 +52,7 @@ async function scrollAndCollectAllJobs(page, maxJobs = 200) {
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
     await wait(3000);
 
-    // Click all visible "See more jobs" buttons
+    // Click "See more jobs" buttons
     const seeMoreButtons = await page.$$("button.infinite-scroller__show-more-button");
     for (const btn of seeMoreButtons) {
       try {
@@ -59,21 +64,20 @@ async function scrollAndCollectAllJobs(page, maxJobs = 200) {
     // Collect jobs
     const currentJobs = await page.evaluate(() => {
       const results = [];
-      const cards = document.querySelectorAll(
-        "ul.jobs-search__results-list li, .base-card"
-      );
-
+      const cards = document.querySelectorAll("ul.jobs-search__results-list li, .base-card");
       cards.forEach((card) => {
         const title = card.querySelector(".base-search-card__title")?.innerText.trim();
-        const company =
-          card.querySelector(".base-search-card__subtitle")?.innerText.trim();
-        const location =
-          card.querySelector(".job-search-card__location")?.innerText.trim();
-        const link = card.querySelector("a")?.href;
-        const date =
-          card.querySelector(
-            ".job-search-card__listdate, .job-search-card__listdate--new"
-          )?.innerText.trim();
+        const company = card.querySelector(".base-search-card__subtitle")?.innerText.trim();
+        const location = card.querySelector(".job-search-card__location")?.innerText.trim();
+        let link = card.querySelector("a")?.href;
+
+        // Strip tracking params to make the URL permanent
+        if (link) {
+          const urlObj = new URL(link);
+          link = `https://www.linkedin.com/jobs/view/${urlObj.pathname.split("-").pop()}`;
+        }
+
+        const date = card.querySelector(".job-search-card__listdate, .job-search-card__listdate--new")?.innerText.trim();
 
         if (title && company && link) {
           results.push({
@@ -86,7 +90,6 @@ async function scrollAndCollectAllJobs(page, maxJobs = 200) {
           });
         }
       });
-
       return results;
     });
 
@@ -119,8 +122,6 @@ async function scrollAndCollectAllJobs(page, maxJobs = 200) {
 // Main function to fetch LinkedIn jobs
 export async function fetchLinkedInJobs(keyword, location) {
   try {
-    const puppeteerToUse = isLocal ? puppeteer : puppeteerCore;
-
     if (!browser || !browser.isConnected()) {
       browser = await puppeteerToUse.launch(
         isLocal
@@ -139,6 +140,9 @@ export async function fetchLinkedInJobs(keyword, location) {
     }
 
     const page = await browser.newPage();
+    await page.setUserAgent(
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"
+    );
 
     await page.setRequestInterception(true);
     page.on("request", (req) => {
@@ -153,12 +157,9 @@ export async function fetchLinkedInJobs(keyword, location) {
 
     console.log("🔎 Navigating to:", url);
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60000 });
-    await page.waitForSelector("ul.jobs-search__results-list li, .base-card", {
-      timeout: 30000,
-    });
+    await page.waitForSelector("ul.jobs-search__results-list li, .base-card", { timeout: 30000 });
 
     console.log("✅ Page loaded, starting job collection...");
-
     let jobs = await scrollAndCollectAllJobs(page, 200);
 
     // Sort newest first
