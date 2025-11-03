@@ -18,42 +18,61 @@ if (isRender) {
     "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
 }
 
-// 🆕 Fetch free proxies
+// 🆕 Fetch free proxies (HTTPS/SOCKS5 for tunnel support)
 async function getFreeProxies() {
-  try {
-    console.log("🔄 Fetching free proxies...");
-    const response = await fetch(
-      "https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=10000&country=all&ssl=all&anonymity=all"
-    );
-    const text = await response.text();
-    const proxies = text.split("\n").filter((p) => p.trim());
-    console.log(`✅ Found ${proxies.length} proxies`);
-    return proxies;
-  } catch (err) {
-    console.error("❌ Failed to fetch proxies:", err.message);
-    return [];
+  const sources = [
+    // HTTPS proxies (better for Indeed)
+    "https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=10000&country=all&ssl=yes&anonymity=elite",
+    // Backup source
+    "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt",
+    // SOCKS5 as fallback
+    "https://api.proxyscrape.com/v2/?request=displayproxies&protocol=socks5&timeout=10000&country=all",
+  ];
+
+  for (const source of sources) {
+    try {
+      console.log(`🔄 Fetching proxies from: ${source.substring(0, 50)}...`);
+      const response = await fetch(source, { timeout: 10000 });
+      const text = await response.text();
+      const proxies = text.split("\n").filter((p) => p.trim() && p.includes(":"));
+      
+      if (proxies.length > 0) {
+        console.log(`✅ Found ${proxies.length} proxies`);
+        return proxies;
+      }
+    } catch (err) {
+      console.log(`⚠️ Source failed, trying next...`);
+    }
   }
+  
+  console.error("❌ All proxy sources failed");
+  return [];
 }
 
-// 🆕 Test if a proxy works
+// 🆕 Test if a proxy works with HTTPS
 async function testProxy(proxy) {
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
+    const timeoutId = setTimeout(() => controller.abort(), 8000); // Increased timeout
+    
+    // Test with HTTPS site (Indeed is HTTPS)
+    const [host, port] = proxy.split(":");
+    const proxyUrl = `http://${host}:${port}`;
     
     const response = await fetch("https://www.google.com", {
       signal: controller.signal,
       method: "HEAD",
+      // Note: Node fetch doesn't support proxy natively, but browser will
     });
     
-    clearTimeout(timeout);
+    clearTimeout(timeoutId);
     return response.ok;
   } catch {
     return false;
   }
 }
 
-// 🆕 Get a working proxy
+// 🆕 Get a working proxy (skip testing, just try directly)
 async function getWorkingProxy() {
   const proxies = await getFreeProxies();
   
@@ -62,20 +81,11 @@ async function getWorkingProxy() {
     return null;
   }
 
-  // Test first 5 proxies
-  for (let i = 0; i < Math.min(5, proxies.length); i++) {
-    const proxy = proxies[i];
-    console.log(`🧪 Testing proxy ${i + 1}: ${proxy}`);
-    
-    const works = await testProxy(proxy);
-    if (works) {
-      console.log(`✅ Proxy works: ${proxy}`);
-      return proxy;
-    }
-  }
-
-  console.log("⚠️ No working proxy found, continuing without proxy");
-  return null;
+  // Return first 3 proxies without testing (testing via fetch doesn't work the same as Chrome)
+  const selectedProxies = proxies.slice(0, 3);
+  console.log(`📋 Selected ${selectedProxies.length} proxies to try`);
+  
+  return selectedProxies;
 }
 
 // ✅ Improved job card detection
@@ -217,50 +227,73 @@ export async function fetchIndeedJobs(keyword) {
   try {
     console.log(isRender ? "🟢 Running on Render — setting up Chromium..." : "💻 Running locally...");
 
-    // 🆕 Get working proxy only on Render
-    const proxy = isRender ? await getWorkingProxy() : null;
+    // 🆕 Get proxies to try (array of proxies)
+    const proxies = isRender ? await getWorkingProxy() : null;
+    
+    // Try with multiple proxies
+    for (let proxyAttempt = 0; proxyAttempt <= (proxies?.length || 0); proxyAttempt++) {
+      const proxy = proxies?.[proxyAttempt];
+      
+      try {
+        console.log(proxy ? `🔐 Attempt ${proxyAttempt + 1}: Using proxy ${proxy}` : "🌐 Attempting without proxy...");
 
-    const { browser: br, page } = await connect({
-      headless: isRender,
-      args: isRender
-        ? [
-            "--no-sandbox",
-            "--disable-setuid-sandbox",
-            "--disable-dev-shm-usage",
-            "--disable-gpu",
-            "--disable-features=IsolateOrigins",
-            "--disable-site-isolation-trials",
-            ...(proxy ? [`--proxy-server=${proxy}`] : []), // 🆕 Add proxy if available
-          ]
-        : [],
-      turnstile: true,
-    });
+        const { browser: br, page } = await connect({
+          headless: isRender,
+          args: isRender
+            ? [
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-gpu",
+                "--disable-features=IsolateOrigins",
+                "--disable-site-isolation-trials",
+                ...(proxy ? [`--proxy-server=${proxy}`] : []),
+              ]
+            : [],
+          turnstile: true,
+        });
 
-    browser = br;
+        browser = br;
 
-    if (proxy) {
-      console.log(`🔐 Using proxy: ${proxy}`);
+        const url = `https://il.indeed.com/q-${encodeURIComponent(
+          keyword
+        )}-jobs.html?from=relatedQueries&saIdx=3&rqf=1`;
+
+        console.log("🔎 Navigating to:", url);
+        await page.goto(url, { waitUntil: "networkidle2", timeout: 60000 });
+
+        console.log("⏳ Waiting for the page to fully load before scrolling...");
+        await wait(10000);
+
+        const jobs = await scrollAndCollectAllJobs(page, 200);
+
+        console.log("🧹 Closing browser...");
+        await browser.close();
+
+        console.log(`✅ Total jobs collected: ${jobs.length}`);
+        return jobs;
+        
+      } catch (err) {
+        console.log(`❌ Attempt ${proxyAttempt + 1} failed: ${err.message}`);
+        if (browser) {
+          try {
+            await browser.close();
+          } catch {}
+        }
+        
+        // If this was the last attempt, throw error
+        if (proxyAttempt === (proxies?.length || 0)) {
+          throw err;
+        }
+        
+        // Otherwise try next proxy
+        console.log("🔄 Trying next proxy...");
+        await wait(2000);
+      }
     }
-
-    const url = `https://il.indeed.com/q-${encodeURIComponent(
-      keyword
-    )}-jobs.html?from=relatedQueries&saIdx=3&rqf=1`;
-
-    console.log("🔎 Navigating to:", url);
-    await page.goto(url, { waitUntil: "networkidle2", timeout: 60000 });
-
-    console.log("⏳ Waiting for the page to fully load before scrolling...");
-    await wait(10000);
-
-    const jobs = await scrollAndCollectAllJobs(page, 200);
-
-    console.log("🧹 Closing browser...");
-    await browser.close();
-
-    console.log(`✅ Total jobs collected: ${jobs.length}`);
-    return jobs;
+    
   } catch (err) {
-    console.error("❌ Error fetching Indeed jobs:", err);
+    console.error("❌ All attempts failed:", err);
     if (browser) {
       try {
         await browser.close();
