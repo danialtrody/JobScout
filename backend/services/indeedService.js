@@ -11,44 +11,22 @@ const isRender = process.env.RENDER === "true";
 
 // Set CHROME_PATH for Render or fallback to local Chrome
 if (isRender) {
-  process.env.CHROME_PATH = await chromium.executablePath();
-  console.log("✅ CHROME_PATH set to:", process.env.CHROME_PATH);
+  process.env.CHROME_PATH = chromium.path;
 } else if (!process.env.CHROME_PATH) {
+  // Change this path if your local Chrome is installed elsewhere
   process.env.CHROME_PATH =
     "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
 }
 
-// 🆕 Random user agents to rotate
-const userAgents = [
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
-];
-
-// 🆕 Get random user agent
-function getRandomUserAgent() {
-  return userAgents[Math.floor(Math.random() * userAgents.length)];
-}
-
-// ✅ Improved job card detection
-async function waitForJobCards(page, retries = 15, delay = 4000) {
+// Retry waiting for job cards to appear
+async function waitForJobCards(page, retries = 5, delay = 2000) {
   for (let i = 0; i < retries; i++) {
     const exists = await page.$(
-      ".job_seen_beacon, .cardOutline, div[data-jk], .jobsearch-ResultsList li, .jobCard_mainContent"
+      ".job_seen_beacon, .cardOutline, div[data-jk], .jobsearch-ResultsList > li"
     );
     if (exists) return true;
-
-    console.log(`⏳ Waiting for job cards... attempt ${i + 1}/${retries}`);
     await wait(delay);
   }
-
-  // Debug what's actually rendered on page before giving up
-  const htmlSnippet = await page.evaluate(() =>
-    document.body.innerText.slice(0, 500)
-  );
-  console.log("❌ Still no job cards found. HTML preview:", htmlSnippet);
   return false;
 }
 
@@ -83,7 +61,7 @@ async function scrollAndCollectAllJobs(page, maxJobs = 100) {
     "junior developer",
     "junior engineer",
   ];
-
+  
   let currentPage = 0;
   const maxPages = 10;
 
@@ -95,7 +73,7 @@ async function scrollAndCollectAllJobs(page, maxJobs = 100) {
     }
 
     const currentJobs = await page.$$eval(
-      ".job_seen_beacon, .cardOutline, div[data-jk], .jobsearch-ResultsList > li, .jobCard_mainContent",
+      ".job_seen_beacon, .cardOutline, div[data-jk], .jobsearch-ResultsList > li",
       (cards, experienceKeywords) => {
         const results = [];
         cards.forEach((card) => {
@@ -156,7 +134,7 @@ async function scrollAndCollectAllJobs(page, maxJobs = 100) {
         nextButton.click(),
       ]);
       currentPage++;
-      await wait(3000); // Longer delay between pages
+      await wait(2000);
     } catch {
       break;
     }
@@ -167,128 +145,41 @@ async function scrollAndCollectAllJobs(page, maxJobs = 100) {
 }
 
 export async function fetchIndeedJobs(keyword) {
-  let browser;
   try {
-    console.log(isRender ? "🟢 Running on Render — setting up Chromium with Stealth Mode..." : "💻 Running locally...");
-
-    const userAgent = getRandomUserAgent();
-    console.log("🎭 Using User-Agent:", userAgent.substring(0, 50) + "...");
-
-    // 🆕 Enhanced stealth configuration
-    const { browser: br, page } = await connect({
-      headless: isRender ? "new" : false, // Use new headless mode (better for stealth)
+    const { browser, page } = await connect({
+      headless: isRender,
       args: isRender
         ? [
             "--no-sandbox",
             "--disable-setuid-sandbox",
             "--disable-dev-shm-usage",
             "--disable-gpu",
-            "--window-size=1920,1080",
-            "--disable-blink-features=AutomationControlled", // Hide automation
-            "--disable-features=IsolateOrigins,site-per-process",
-            `--user-agent=${userAgent}`,
-            "--lang=en-US,en;q=0.9",
-            "--disable-web-security",
-            "--disable-features=VizDisplayCompositor",
+            "--disable-features=IsolateOrigins",
+            "--disable-site-isolation-trials",
           ]
         : [],
       turnstile: true,
-      customConfig: {}, // Enables puppeteer-real-browser's anti-detection
     });
 
-    browser = br;
+    // Sort by date and show jobs from last 24 hours
+    const url = `https://il.indeed.com/q-${encodeURIComponent(
+      keyword
+    )}-jobs.html?from=relatedQueries&saIdx=3&rqf=1&sort=date`;
 
-    // 🆕 Additional stealth injections
-    await page.evaluateOnNewDocument(() => {
-      // Hide webdriver property
-      Object.defineProperty(navigator, "webdriver", {
-        get: () => undefined,
-      });
+    console.log("🔎 Navigating to:", url);
+    await page.goto(url, { waitUntil: "networkidle2", timeout: 60000 });
 
-      // Mock chrome object
-      window.chrome = {
-        runtime: {},
-      };
-
-      // Mock permissions
-      const originalQuery = window.navigator.permissions.query;
-      window.navigator.permissions.query = (parameters) =>
-        parameters.name === "notifications"
-          ? Promise.resolve({ state: Notification.permission })
-          : originalQuery(parameters);
-
-      // Mock plugins
-      Object.defineProperty(navigator, "plugins", {
-        get: () => [1, 2, 3, 4, 5],
-      });
-
-      // Mock languages
-      Object.defineProperty(navigator, "languages", {
-        get: () => ["en-US", "en"],
-      });
-    });
-
-    // 🆕 Set additional headers
-    await page.setExtraHTTPHeaders({
-      "Accept-Language": "en-US,en;q=0.9",
-      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-      "Accept-Encoding": "gzip, deflate, br",
-      "Connection": "keep-alive",
-      "Upgrade-Insecure-Requests": "1",
-    });
-
-    // 🆕 Try different Indeed URL formats
-    const urls = [
-      `https://il.indeed.com/jobs?q=${encodeURIComponent(keyword)}&l=Israel`, // Simpler format
-      `https://il.indeed.com/q-${encodeURIComponent(keyword)}-jobs.html`,
-    ];
-
-    let success = false;
-    for (const url of urls) {
-      try {
-        console.log("🔎 Navigating to:", url);
-        await page.goto(url, { 
-          waitUntil: "networkidle2", 
-          timeout: 60000 
-        });
-
-        // 🆕 Random human-like delay
-        const randomDelay = Math.floor(Math.random() * 5000) + 10000; // 10-15 seconds
-        console.log(`⏳ Waiting ${randomDelay / 1000}s for page to load (human-like behavior)...`);
-        await wait(randomDelay);
-
-        // Check if we got blocked
-        const bodyText = await page.evaluate(() => document.body.innerText);
-        if (bodyText.includes("Request Blocked") || bodyText.includes("Ray ID")) {
-          console.log("❌ Still blocked on this URL, trying next...");
-          continue;
-        }
-
-        success = true;
-        break;
-      } catch (err) {
-        console.log(`❌ Failed with URL: ${url}`, err.message);
-      }
-    }
-
-    if (!success) {
-      throw new Error("All URL formats failed - site is blocking requests");
-    }
+    console.log("⏳ Waiting for the page to fully load before scrolling...");
+    await wait(10000);
 
     const jobs = await scrollAndCollectAllJobs(page, 200);
 
-    console.log("🧹 Closing browser...");
-    await browser.close();
+    if (isRender) await browser.close();
 
     console.log(`✅ Total jobs collected: ${jobs.length}`);
     return jobs;
   } catch (err) {
-    console.error("❌ Error fetching Indeed jobs:", err.message);
-    if (browser) {
-      try {
-        await browser.close();
-      } catch {}
-    }
+    console.error("❌ Error fetching Indeed jobs:", err);
     return [];
   }
 }
