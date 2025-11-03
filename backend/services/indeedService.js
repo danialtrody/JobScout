@@ -9,13 +9,23 @@ function wait(ms) {
 // Detect if running on Render
 const isRender = process.env.RENDER === "true";
 
-// Set CHROME_PATH for Render or fallback to local Chrome
-if (isRender) {
-  process.env.CHROME_PATH = chromium.path;
-} else if (!process.env.CHROME_PATH) {
-  // Change this path if your local Chrome is installed elsewhere
-  process.env.CHROME_PATH =
-    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
+async function setupChromePath() {
+  if (isRender) {
+    console.log("🟢 Running on Render — setting up Chromium...");
+    try {
+      const executablePath = await chromium.executablePath();
+      process.env.CHROME_PATH = executablePath;
+      console.log("✅ CHROME_PATH set to:", executablePath);
+    } catch (err) {
+      console.error("❌ Failed to get chromium executable path:", err);
+    }
+  } else if (!process.env.CHROME_PATH) {
+    process.env.CHROME_PATH =
+      "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
+    console.log("🖥️ Running locally — CHROME_PATH set to:", process.env.CHROME_PATH);
+  } else {
+    console.log("ℹ️ Using existing CHROME_PATH:", process.env.CHROME_PATH);
+  }
 }
 
 // Retry waiting for job cards to appear
@@ -61,7 +71,7 @@ async function scrollAndCollectAllJobs(page, maxJobs = 100) {
     "junior developer",
     "junior engineer",
   ];
-  
+
   let currentPage = 0;
   const maxPages = 10;
 
@@ -145,7 +155,11 @@ async function scrollAndCollectAllJobs(page, maxJobs = 100) {
 }
 
 export async function fetchIndeedJobs(keyword) {
+  await setupChromePath();
+
   try {
+    console.log("🚀 Launching browser with CHROME_PATH:", process.env.CHROME_PATH);
+
     const { browser, page } = await connect({
       headless: isRender,
       args: isRender
@@ -158,10 +172,10 @@ export async function fetchIndeedJobs(keyword) {
             "--disable-site-isolation-trials",
           ]
         : [],
+      executablePath: process.env.CHROME_PATH,
       turnstile: true,
     });
 
-    // Sort by date and show jobs from last 24 hours
     const url = `https://il.indeed.com/q-${encodeURIComponent(
       keyword
     )}-jobs.html?from=relatedQueries&saIdx=3&rqf=1&sort=date&fromage=1`;
@@ -174,12 +188,16 @@ export async function fetchIndeedJobs(keyword) {
 
     const jobs = await scrollAndCollectAllJobs(page, 200);
 
-    if (isRender) await browser.close();
+    if (isRender) {
+      console.log("🧹 Closing browser...");
+      await browser.close();
+    }
 
     console.log(`✅ Total jobs collected: ${jobs.length}`);
     return jobs;
   } catch (err) {
     console.error("❌ Error fetching Indeed jobs:", err);
+    console.error("🧩 CHROME_PATH at error time:", process.env.CHROME_PATH);
     return [];
   }
 }
