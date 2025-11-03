@@ -11,11 +11,71 @@ const isRender = process.env.RENDER === "true";
 
 // Set CHROME_PATH for Render or fallback to local Chrome
 if (isRender) {
-  process.env.CHROME_PATH = await chromium.executablePath(); // ✅ safer than chromium.path
+  process.env.CHROME_PATH = await chromium.executablePath();
   console.log("✅ CHROME_PATH set to:", process.env.CHROME_PATH);
 } else if (!process.env.CHROME_PATH) {
   process.env.CHROME_PATH =
     "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
+}
+
+// 🆕 Fetch free proxies
+async function getFreeProxies() {
+  try {
+    console.log("🔄 Fetching free proxies...");
+    const response = await fetch(
+      "https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=10000&country=all&ssl=all&anonymity=all"
+    );
+    const text = await response.text();
+    const proxies = text.split("\n").filter((p) => p.trim());
+    console.log(`✅ Found ${proxies.length} proxies`);
+    return proxies;
+  } catch (err) {
+    console.error("❌ Failed to fetch proxies:", err.message);
+    return [];
+  }
+}
+
+// 🆕 Test if a proxy works
+async function testProxy(proxy) {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    
+    const response = await fetch("https://www.google.com", {
+      signal: controller.signal,
+      method: "HEAD",
+    });
+    
+    clearTimeout(timeout);
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+// 🆕 Get a working proxy
+async function getWorkingProxy() {
+  const proxies = await getFreeProxies();
+  
+  if (proxies.length === 0) {
+    console.log("⚠️ No proxies available, continuing without proxy");
+    return null;
+  }
+
+  // Test first 5 proxies
+  for (let i = 0; i < Math.min(5, proxies.length); i++) {
+    const proxy = proxies[i];
+    console.log(`🧪 Testing proxy ${i + 1}: ${proxy}`);
+    
+    const works = await testProxy(proxy);
+    if (works) {
+      console.log(`✅ Proxy works: ${proxy}`);
+      return proxy;
+    }
+  }
+
+  console.log("⚠️ No working proxy found, continuing without proxy");
+  return null;
 }
 
 // ✅ Improved job card detection
@@ -153,10 +213,14 @@ async function scrollAndCollectAllJobs(page, maxJobs = 100) {
 }
 
 export async function fetchIndeedJobs(keyword) {
+  let browser;
   try {
     console.log(isRender ? "🟢 Running on Render — setting up Chromium..." : "💻 Running locally...");
 
-    const { browser, page } = await connect({
+    // 🆕 Get working proxy only on Render
+    const proxy = isRender ? await getWorkingProxy() : null;
+
+    const { browser: br, page } = await connect({
       headless: isRender,
       args: isRender
         ? [
@@ -166,10 +230,17 @@ export async function fetchIndeedJobs(keyword) {
             "--disable-gpu",
             "--disable-features=IsolateOrigins",
             "--disable-site-isolation-trials",
+            ...(proxy ? [`--proxy-server=${proxy}`] : []), // 🆕 Add proxy if available
           ]
         : [],
       turnstile: true,
     });
+
+    browser = br;
+
+    if (proxy) {
+      console.log(`🔐 Using proxy: ${proxy}`);
+    }
 
     const url = `https://il.indeed.com/q-${encodeURIComponent(
       keyword
@@ -184,12 +255,17 @@ export async function fetchIndeedJobs(keyword) {
     const jobs = await scrollAndCollectAllJobs(page, 200);
 
     console.log("🧹 Closing browser...");
-    if (isRender) await browser.close();
+    await browser.close();
 
     console.log(`✅ Total jobs collected: ${jobs.length}`);
     return jobs;
   } catch (err) {
     console.error("❌ Error fetching Indeed jobs:", err);
+    if (browser) {
+      try {
+        await browser.close();
+      } catch {}
+    }
     return [];
   }
 }
