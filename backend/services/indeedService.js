@@ -9,34 +9,32 @@ function wait(ms) {
 // Detect if running on Render
 const isRender = process.env.RENDER === "true";
 
-async function setupChromePath() {
-  if (isRender) {
-    console.log("🟢 Running on Render — setting up Chromium...");
-    try {
-      const executablePath = await chromium.executablePath();
-      process.env.CHROME_PATH = executablePath;
-      console.log("✅ CHROME_PATH set to:", executablePath);
-    } catch (err) {
-      console.error("❌ Failed to get chromium executable path:", err);
-    }
-  } else if (!process.env.CHROME_PATH) {
-    process.env.CHROME_PATH =
-      "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
-    console.log("🖥️ Running locally — CHROME_PATH set to:", process.env.CHROME_PATH);
-  } else {
-    console.log("ℹ️ Using existing CHROME_PATH:", process.env.CHROME_PATH);
-  }
+// Set CHROME_PATH for Render or fallback to local Chrome
+if (isRender) {
+  process.env.CHROME_PATH = await chromium.executablePath(); // ✅ safer than chromium.path
+  console.log("✅ CHROME_PATH set to:", process.env.CHROME_PATH);
+} else if (!process.env.CHROME_PATH) {
+  process.env.CHROME_PATH =
+    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
 }
 
-// Retry waiting for job cards to appear
-async function waitForJobCards(page, retries = 5, delay = 2000) {
+// ✅ Improved job card detection
+async function waitForJobCards(page, retries = 10, delay = 3000) {
   for (let i = 0; i < retries; i++) {
     const exists = await page.$(
-      ".job_seen_beacon, .cardOutline, div[data-jk], .jobsearch-ResultsList > li"
+      ".job_seen_beacon, .cardOutline, div[data-jk], .jobsearch-ResultsList li, .jobCard_mainContent"
     );
     if (exists) return true;
+
+    console.log(`⏳ Waiting for job cards... attempt ${i + 1}/${retries}`);
     await wait(delay);
   }
+
+  // Debug what's actually rendered on page before giving up
+  const htmlSnippet = await page.evaluate(() =>
+    document.body.innerText.slice(0, 400)
+  );
+  console.log("❌ Still no job cards found. HTML preview:", htmlSnippet);
   return false;
 }
 
@@ -83,7 +81,7 @@ async function scrollAndCollectAllJobs(page, maxJobs = 100) {
     }
 
     const currentJobs = await page.$$eval(
-      ".job_seen_beacon, .cardOutline, div[data-jk], .jobsearch-ResultsList > li",
+      ".job_seen_beacon, .cardOutline, div[data-jk], .jobsearch-ResultsList > li, .jobCard_mainContent",
       (cards, experienceKeywords) => {
         const results = [];
         cards.forEach((card) => {
@@ -155,10 +153,8 @@ async function scrollAndCollectAllJobs(page, maxJobs = 100) {
 }
 
 export async function fetchIndeedJobs(keyword) {
-  await setupChromePath();
-
   try {
-    console.log("🚀 Launching browser with CHROME_PATH:", process.env.CHROME_PATH);
+    console.log(isRender ? "🟢 Running on Render — setting up Chromium..." : "💻 Running locally...");
 
     const { browser, page } = await connect({
       headless: isRender,
@@ -172,13 +168,12 @@ export async function fetchIndeedJobs(keyword) {
             "--disable-site-isolation-trials",
           ]
         : [],
-      executablePath: process.env.CHROME_PATH,
       turnstile: true,
     });
 
     const url = `https://il.indeed.com/q-${encodeURIComponent(
       keyword
-    )}-jobs.html?from=relatedQueries&saIdx=3&rqf=1&sort=date&fromage=1`;
+    )}-jobs.html?from=relatedQueries&saIdx=3&rqf=1`;
 
     console.log("🔎 Navigating to:", url);
     await page.goto(url, { waitUntil: "networkidle2", timeout: 60000 });
@@ -188,16 +183,13 @@ export async function fetchIndeedJobs(keyword) {
 
     const jobs = await scrollAndCollectAllJobs(page, 200);
 
-    if (isRender) {
-      console.log("🧹 Closing browser...");
-      await browser.close();
-    }
+    console.log("🧹 Closing browser...");
+    if (isRender) await browser.close();
 
     console.log(`✅ Total jobs collected: ${jobs.length}`);
     return jobs;
   } catch (err) {
     console.error("❌ Error fetching Indeed jobs:", err);
-    console.error("🧩 CHROME_PATH at error time:", process.env.CHROME_PATH);
     return [];
   }
 }
