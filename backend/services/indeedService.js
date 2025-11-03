@@ -18,78 +18,22 @@ if (isRender) {
     "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
 }
 
-// 🆕 Fetch free proxies (HTTPS/SOCKS5 for tunnel support)
-async function getFreeProxies() {
-  const sources = [
-    // HTTPS proxies (better for Indeed)
-    "https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=10000&country=all&ssl=yes&anonymity=elite",
-    // Backup source
-    "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt",
-    // SOCKS5 as fallback
-    "https://api.proxyscrape.com/v2/?request=displayproxies&protocol=socks5&timeout=10000&country=all",
-  ];
+// 🆕 Random user agents to rotate
+const userAgents = [
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
+];
 
-  for (const source of sources) {
-    try {
-      console.log(`🔄 Fetching proxies from: ${source.substring(0, 50)}...`);
-      const response = await fetch(source, { timeout: 10000 });
-      const text = await response.text();
-      const proxies = text.split("\n").filter((p) => p.trim() && p.includes(":"));
-      
-      if (proxies.length > 0) {
-        console.log(`✅ Found ${proxies.length} proxies`);
-        return proxies;
-      }
-    } catch (err) {
-      console.log(`⚠️ Source failed, trying next...`);
-    }
-  }
-  
-  console.error("❌ All proxy sources failed");
-  return [];
-}
-
-// 🆕 Test if a proxy works with HTTPS
-async function testProxy(proxy) {
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000); // Increased timeout
-    
-    // Test with HTTPS site (Indeed is HTTPS)
-    const [host, port] = proxy.split(":");
-    const proxyUrl = `http://${host}:${port}`;
-    
-    const response = await fetch("https://www.google.com", {
-      signal: controller.signal,
-      method: "HEAD",
-      // Note: Node fetch doesn't support proxy natively, but browser will
-    });
-    
-    clearTimeout(timeoutId);
-    return response.ok;
-  } catch {
-    return false;
-  }
-}
-
-// 🆕 Get a working proxy (skip testing, just try directly)
-async function getWorkingProxy() {
-  const proxies = await getFreeProxies();
-  
-  if (proxies.length === 0) {
-    console.log("⚠️ No proxies available, continuing without proxy");
-    return null;
-  }
-
-  // Return first 3 proxies without testing (testing via fetch doesn't work the same as Chrome)
-  const selectedProxies = proxies.slice(0, 3);
-  console.log(`📋 Selected ${selectedProxies.length} proxies to try`);
-  
-  return selectedProxies;
+// 🆕 Get random user agent
+function getRandomUserAgent() {
+  return userAgents[Math.floor(Math.random() * userAgents.length)];
 }
 
 // ✅ Improved job card detection
-async function waitForJobCards(page, retries = 10, delay = 3000) {
+async function waitForJobCards(page, retries = 15, delay = 4000) {
   for (let i = 0; i < retries; i++) {
     const exists = await page.$(
       ".job_seen_beacon, .cardOutline, div[data-jk], .jobsearch-ResultsList li, .jobCard_mainContent"
@@ -102,7 +46,7 @@ async function waitForJobCards(page, retries = 10, delay = 3000) {
 
   // Debug what's actually rendered on page before giving up
   const htmlSnippet = await page.evaluate(() =>
-    document.body.innerText.slice(0, 400)
+    document.body.innerText.slice(0, 500)
   );
   console.log("❌ Still no job cards found. HTML preview:", htmlSnippet);
   return false;
@@ -212,7 +156,7 @@ async function scrollAndCollectAllJobs(page, maxJobs = 100) {
         nextButton.click(),
       ]);
       currentPage++;
-      await wait(2000);
+      await wait(3000); // Longer delay between pages
     } catch {
       break;
     }
@@ -225,75 +169,121 @@ async function scrollAndCollectAllJobs(page, maxJobs = 100) {
 export async function fetchIndeedJobs(keyword) {
   let browser;
   try {
-    console.log(isRender ? "🟢 Running on Render — setting up Chromium..." : "💻 Running locally...");
+    console.log(isRender ? "🟢 Running on Render — setting up Chromium with Stealth Mode..." : "💻 Running locally...");
 
-    // 🆕 Get proxies to try (array of proxies)
-    const proxies = isRender ? await getWorkingProxy() : null;
-    
-    // Try with multiple proxies
-    for (let proxyAttempt = 0; proxyAttempt <= (proxies?.length || 0); proxyAttempt++) {
-      const proxy = proxies?.[proxyAttempt];
-      
+    const userAgent = getRandomUserAgent();
+    console.log("🎭 Using User-Agent:", userAgent.substring(0, 50) + "...");
+
+    // 🆕 Enhanced stealth configuration
+    const { browser: br, page } = await connect({
+      headless: isRender ? "new" : false, // Use new headless mode (better for stealth)
+      args: isRender
+        ? [
+            "--no-sandbox",
+            "--disable-setuid-sandbox",
+            "--disable-dev-shm-usage",
+            "--disable-gpu",
+            "--window-size=1920,1080",
+            "--disable-blink-features=AutomationControlled", // Hide automation
+            "--disable-features=IsolateOrigins,site-per-process",
+            `--user-agent=${userAgent}`,
+            "--lang=en-US,en;q=0.9",
+            "--disable-web-security",
+            "--disable-features=VizDisplayCompositor",
+          ]
+        : [],
+      turnstile: true,
+      customConfig: {}, // Enables puppeteer-real-browser's anti-detection
+    });
+
+    browser = br;
+
+    // 🆕 Additional stealth injections
+    await page.evaluateOnNewDocument(() => {
+      // Hide webdriver property
+      Object.defineProperty(navigator, "webdriver", {
+        get: () => undefined,
+      });
+
+      // Mock chrome object
+      window.chrome = {
+        runtime: {},
+      };
+
+      // Mock permissions
+      const originalQuery = window.navigator.permissions.query;
+      window.navigator.permissions.query = (parameters) =>
+        parameters.name === "notifications"
+          ? Promise.resolve({ state: Notification.permission })
+          : originalQuery(parameters);
+
+      // Mock plugins
+      Object.defineProperty(navigator, "plugins", {
+        get: () => [1, 2, 3, 4, 5],
+      });
+
+      // Mock languages
+      Object.defineProperty(navigator, "languages", {
+        get: () => ["en-US", "en"],
+      });
+    });
+
+    // 🆕 Set additional headers
+    await page.setExtraHTTPHeaders({
+      "Accept-Language": "en-US,en;q=0.9",
+      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+      "Accept-Encoding": "gzip, deflate, br",
+      "Connection": "keep-alive",
+      "Upgrade-Insecure-Requests": "1",
+    });
+
+    // 🆕 Try different Indeed URL formats
+    const urls = [
+      `https://il.indeed.com/jobs?q=${encodeURIComponent(keyword)}&l=Israel`, // Simpler format
+      `https://il.indeed.com/q-${encodeURIComponent(keyword)}-jobs.html`,
+    ];
+
+    let success = false;
+    for (const url of urls) {
       try {
-        console.log(proxy ? `🔐 Attempt ${proxyAttempt + 1}: Using proxy ${proxy}` : "🌐 Attempting without proxy...");
-
-        const { browser: br, page } = await connect({
-          headless: isRender,
-          args: isRender
-            ? [
-                "--no-sandbox",
-                "--disable-setuid-sandbox",
-                "--disable-dev-shm-usage",
-                "--disable-gpu",
-                "--disable-features=IsolateOrigins",
-                "--disable-site-isolation-trials",
-                ...(proxy ? [`--proxy-server=${proxy}`] : []),
-              ]
-            : [],
-          turnstile: true,
+        console.log("🔎 Navigating to:", url);
+        await page.goto(url, { 
+          waitUntil: "networkidle2", 
+          timeout: 60000 
         });
 
-        browser = br;
+        // 🆕 Random human-like delay
+        const randomDelay = Math.floor(Math.random() * 5000) + 10000; // 10-15 seconds
+        console.log(`⏳ Waiting ${randomDelay / 1000}s for page to load (human-like behavior)...`);
+        await wait(randomDelay);
 
-        const url = `https://il.indeed.com/q-${encodeURIComponent(
-          keyword
-        )}-jobs.html?from=relatedQueries&saIdx=3&rqf=1`;
+        // Check if we got blocked
+        const bodyText = await page.evaluate(() => document.body.innerText);
+        if (bodyText.includes("Request Blocked") || bodyText.includes("Ray ID")) {
+          console.log("❌ Still blocked on this URL, trying next...");
+          continue;
+        }
 
-        console.log("🔎 Navigating to:", url);
-        await page.goto(url, { waitUntil: "networkidle2", timeout: 60000 });
-
-        console.log("⏳ Waiting for the page to fully load before scrolling...");
-        await wait(10000);
-
-        const jobs = await scrollAndCollectAllJobs(page, 200);
-
-        console.log("🧹 Closing browser...");
-        await browser.close();
-
-        console.log(`✅ Total jobs collected: ${jobs.length}`);
-        return jobs;
-        
+        success = true;
+        break;
       } catch (err) {
-        console.log(`❌ Attempt ${proxyAttempt + 1} failed: ${err.message}`);
-        if (browser) {
-          try {
-            await browser.close();
-          } catch {}
-        }
-        
-        // If this was the last attempt, throw error
-        if (proxyAttempt === (proxies?.length || 0)) {
-          throw err;
-        }
-        
-        // Otherwise try next proxy
-        console.log("🔄 Trying next proxy...");
-        await wait(2000);
+        console.log(`❌ Failed with URL: ${url}`, err.message);
       }
     }
-    
+
+    if (!success) {
+      throw new Error("All URL formats failed - site is blocking requests");
+    }
+
+    const jobs = await scrollAndCollectAllJobs(page, 200);
+
+    console.log("🧹 Closing browser...");
+    await browser.close();
+
+    console.log(`✅ Total jobs collected: ${jobs.length}`);
+    return jobs;
   } catch (err) {
-    console.error("❌ All attempts failed:", err);
+    console.error("❌ Error fetching Indeed jobs:", err.message);
     if (browser) {
       try {
         await browser.close();
