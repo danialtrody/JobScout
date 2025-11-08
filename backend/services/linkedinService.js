@@ -106,7 +106,7 @@ async function scrollAndCollectAllJobs(page, maxJobs = 200) {
 
     if (jobsAdded === 0) {
       noNewJobsCount++;
-      if (noNewJobsCount >= 2) break;
+      if (noNewJobsCount >= 1) break;
     } else {
       noNewJobsCount = 0;
     }

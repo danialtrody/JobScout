@@ -1,6 +1,6 @@
 import { fetchLinkedInJobs } from "../services/linkedinService.js";
-// import { fetchIndeedJobs } from "../services/indeedService.js";
-// import { fetchAllJobs } from "../services/allJobs.js";
+import { fetchIndeedJobs } from "../services/indeedService.js";
+import { fetchAllJobs } from "../services/allJobs.js";
 
 
 
@@ -9,13 +9,13 @@ export const getJobs = async (req, res) => {
   const location = req.query.location || "Israel";
 
   try {
-    // const indeedJobs = await fetchIndeedJobs(keyword, location);
     const linkeInJobs = await fetchLinkedInJobs(keyword, location);
-    // const AllJobs = await fetchAllJobs(keyword, location);
+    const indeedJobs = await fetchIndeedJobs(keyword, location);
+    const AllJobs = await fetchAllJobs(keyword, location);
 
-    // const result = [...linkeInJobs , ...indeedJobs]
+    const result = [...linkeInJobs , ...indeedJobs , ...AllJobs ]
     // const result = [...AllJobs ]
-    const result = [...linkeInJobs ]
+    // const result = [...linkeInJobs ]
 
 
     res.json(result);
