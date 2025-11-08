@@ -177,6 +177,7 @@ async function scrollAndCollectAllJobs(page, maxJobs = 200) {
 export async function fetchAllJobs(keyword = "") {
   try {
     const { browser, page } = await connect({
+      executablePath: process.env.CHROME_PATH, // <- add this
       headless: isRender,
       args: isRender
         ? ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu"]
