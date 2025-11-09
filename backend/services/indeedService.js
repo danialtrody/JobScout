@@ -7,6 +7,12 @@ function wait(ms) {
 
 const isRender = process.env.RENDER === "true";
 
+if (isRender) {
+  process.env.CHROME_PATH = chromium.path;
+} else if (!process.env.CHROME_PATH) {
+  process.env.CHROME_PATH = "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
+}
+
 // Detect login page
 async function isLoginPage(page) {
   const url = page.url();
@@ -93,36 +99,14 @@ async function scrollAndCollectAllJobs(page, maxPages = 5, maxJobs = 200) {
 
 // Main scraper function
 export async function fetchIndeedJobs(keyword) {
-  let browser;
   try {
-    // Get the correct Chrome executable path
-    const execPath = isRender 
-      ? await chromium.executablePath() 
-      : process.env.CHROME_PATH || "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
-
-    console.log(`🚀 Using Chrome at: ${execPath}`);
-
-    const browserConfig = {
-      executablePath: execPath,
-      headless: isRender ? "new" : false,
+    const { browser, page } = await connect({
+      headless: isRender,
       args: isRender
-        ? [
-            ...chromium.args,
-            "--no-sandbox",
-            "--disable-setuid-sandbox",
-            "--disable-dev-shm-usage",
-            "--disable-gpu",
-            "--single-process",
-            "--no-zygote",
-            "--disable-web-security",
-            "--disable-features=IsolateOrigins,site-per-process"
-          ]
+        ? ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu"]
         : ["--start-maximized"],
       turnstile: true,
-    };
-
-    const { browser: browserInstance, page } = await connect(browserConfig);
-    browser = browserInstance;
+    });
 
     if (!isRender) {
       const dimensions = await page.evaluate(() => ({ width: window.screen.availWidth, height: window.screen.availHeight }));
@@ -143,18 +127,11 @@ export async function fetchIndeedJobs(keyword) {
 
     const jobs = await scrollAndCollectAllJobs(page, 5, 200);
 
-    await browser.close();
+    if (isRender) await browser.close();
     console.log(`✅ Total jobs collected: ${jobs.length}`);
     return jobs;
   } catch (err) {
     console.error("❌ Error fetching Indeed jobs:", err);
-    if (browser) {
-      try {
-        await browser.close();
-      } catch (closeErr) {
-        console.error("Error closing browser:", closeErr);
-      }
-    }
     return [];
   }
 }
