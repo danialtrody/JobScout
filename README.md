@@ -4,8 +4,8 @@
 
 
 ## Demo
+[Download & Watch Demo](https://github.com/danialtrody/JobScout/blob/main/frontend/public/demo.mp4)
 
-[Watch Demo Video](https://github.com/danialtrody/JobScout/blob/main/frontend/public/demo.mp4)
 
 
 
