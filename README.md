@@ -3,6 +3,12 @@
 [![Live Demo](https://img.shields.io/badge/🌍%20Live%20Demo-Click%20Here-brightgreen?style=for-the-badge)](https://jobscout-cf6d.onrender.com)
 
 
+## Demo
+
+[Watch Demo Video](https://github.com/danialtrody/JobScout/blob/main/frontend/public/demo.mp4)
+
+
+
 ## 📖 About
 
 **JobScout** is a modern, web-based job board that fetches the **latest job opportunities** directly from **LinkedIn and Indeed**.
