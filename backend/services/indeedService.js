@@ -30,12 +30,57 @@ async function waitForJobCards(page, retries = 5, delay = 2000) {
   return false;
 }
 
-// Collect jobs from page
+// ✅ Collect only JUNIOR / ENTRY LEVEL jobs (English + Hebrew)
 async function collectJobs(page) {
   return page.$$eval(
     ".job_seen_beacon, .cardOutline, div[data-jk], .jobsearch-ResultsList > li",
     cards => {
-      const excludeKeywords = ["senior", "sr", "lead", "manager", "director", "head", "chief", "principal"];
+      const juniorKeywords = [
+        // --- English keywords ---
+        "junior",
+        "intern",
+        "internship",
+        "no experience",
+        "entry level",
+        "entry-level",
+        "graduate",
+        "trainee",
+        "associate",
+        "new grad",
+        "apprentice",
+        "beginner",
+        "student",
+        "fresh graduate",
+        "starter",
+        "first job",
+        "without experience",
+        "zero experience",
+        "undergraduate",
+        "early career",
+
+        // --- Hebrew keywords ---
+        "ג'וניור",
+        "גוניור",
+        "ללא ניסיון",
+        "ללא נסיון",
+        "בלי ניסיון",
+        "בלי נסיון",
+        "מתחיל",
+        "תפקיד התחלתי",
+        "דרוש ניסיון",
+        "משרת סטודנט",
+        "סטודנט",
+        "משרת התחלה",
+        "משרת התחלתית",
+        "משרת התמחות",
+        "התמחות",
+        "אקדמאי צעיר",
+        "משרה למתחילים",
+        "משרה ללא ניסיון",
+        "משרת ג'וניור",
+        "משרת גוניור",
+      ];
+
       const results = [];
 
       cards.forEach(card => {
@@ -44,10 +89,13 @@ async function collectJobs(page) {
         if (!title) return;
 
         const lowerTitle = title.toLowerCase();
-        if (excludeKeywords.some(word => lowerTitle.includes(word))) return;
+        const isJunior = juniorKeywords.some(word => lowerTitle.includes(word));
+        if (!isJunior) return; // ❌ Skip non-junior jobs
 
-        const company = card.querySelector("[data-testid='company-name'], .companyName")?.innerText?.trim() || "N/A";
-        const location = card.querySelector("[data-testid='text-location'], .companyLocation")?.innerText?.trim() || "N/A";
+        const company =
+          card.querySelector("[data-testid='company-name'], .companyName")?.innerText?.trim() || "N/A";
+        const location =
+          card.querySelector("[data-testid='text-location'], .companyLocation")?.innerText?.trim() || "N/A";
 
         const linkEl = card.querySelector("h2.jobTitle a, .jcs-JobTitle");
         const jobId = card.getAttribute("data-jk") || linkEl?.getAttribute("data-jk");
@@ -109,14 +157,17 @@ export async function fetchIndeedJobs(keyword) {
     });
 
     if (!isRender) {
-      const dimensions = await page.evaluate(() => ({ width: window.screen.availWidth, height: window.screen.availHeight }));
+      const dimensions = await page.evaluate(() => ({
+        width: window.screen.availWidth,
+        height: window.screen.availHeight,
+      }));
       await page.setViewport(dimensions);
     }
 
     const url = `https://il.indeed.com/q-${encodeURIComponent(keyword)}-jobs.html?sort=date&fromage=3`;
     console.log("🔎 Navigating to:", url);
     await page.goto(url, { waitUntil: "networkidle2", timeout: 60000 });
-    await wait(2000);
+    await wait(8000);
 
     // Check login redirect
     if (await isLoginPage(page)) {
